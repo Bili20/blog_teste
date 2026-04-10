@@ -1,0 +1,67 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Author {
+  id        String   @id @default(cuid())
+  name      String
+  initials  String
+  bio       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  posts Post[]
+
+  @@map("authors")
+}
+
+model Tag {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  posts PostTag[]
+
+  @@map("tags")
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  slug      String   @unique
+  title     String
+  subtitle  String
+  excerpt   String
+  body      String
+  category  String
+  readTime  String
+  featured  Boolean  @default(false)
+  published Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  authorId String
+  author   Author @relation(fields: [authorId], references: [id])
+
+  tags PostTag[]
+
+  @@map("posts")
+}
+
+model PostTag {
+  postId String
+  tagId  String
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([postId, tagId])
+  @@map("post_tags")
+}
