@@ -8,10 +8,10 @@ export interface JwtPayload {
 
 export interface LoginResponse {
   accessToken: string;
-  // author: {
-  //   id: string;
-  //   name: string;
-  //   email: string;
-  //   roles: string[];
-  // };
+  author: {
+    id: string;
+    name: string;
+    email: string;
+    roles: string[];
+  };
 }

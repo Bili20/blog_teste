@@ -40,6 +40,12 @@ export class AuthService implements IAuthService {
 
     return {
       accessToken,
+      author: {
+        id: author.id,
+        name: author.name,
+        email: author.email,
+        roles: author.roles,
+      },
     };
   }
 }

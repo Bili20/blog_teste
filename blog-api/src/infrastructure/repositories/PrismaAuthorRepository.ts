@@ -12,6 +12,13 @@ export class PrismaAuthorRepository implements IAuthorRepository {
   async findAll(): Promise<Author[]> {
     return this.prisma.author.findMany({
       orderBy: { name: "asc" },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+      },
     });
   }
 

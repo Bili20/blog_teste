@@ -9,10 +9,14 @@ import {
 
 import { AuthProvider } from "./providers/AuthProvider";
 import { useAuth } from "./hooks/useAuth";
+import { AdminRoute } from "./guards/AdminRoute";
 import HomePage from "./pages/HomePage";
 import AboutPage from "./pages/AboutPage";
 import ArticlePage from "./pages/ArticlePage";
 import LoginPage from "./pages/LoginPage";
+import CreatePostPage from "@/pages/admin/CreatePostPage";
+import EditPostPage from "@/pages/admin/EditPostPage";
+import ManagePostsPage from "@/pages/admin/ManagePostsPage";
 
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -48,6 +52,17 @@ function Layout({ children }: { children: React.ReactNode }) {
 
             {isAuthenticated && user ? (
               <div className="flex items-center gap-3">
+                <Link
+                  to="/admin/posts"
+                  className="hidden sm:inline text-xs tracking-widest uppercase text-stone-500 hover:text-stone-900 transition-colors"
+                  aria-current={
+                    location.pathname.startsWith("/admin/posts")
+                      ? "page"
+                      : undefined
+                  }
+                >
+                  Manage posts
+                </Link>
                 <span className="hidden sm:inline text-xs text-stone-500">
                   {user.name}
                 </span>
@@ -100,6 +115,13 @@ export default function App() {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/post/:slug" element={<ArticlePage />} />
+
+            <Route element={<AdminRoute />}>
+              <Route path="/admin/posts" element={<ManagePostsPage />} />
+              <Route path="/admin/posts/new" element={<CreatePostPage />} />
+              <Route path="/admin/posts/:id/edit" element={<EditPostPage />} />
+            </Route>
+
             <Route path="/:slug" element={<Navigate to="/" replace />} />
             <Route
               path="*"
