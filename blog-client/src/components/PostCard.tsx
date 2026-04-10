@@ -1,7 +1,7 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { type Post } from "@/mocks/posts";
+import { type Post } from "@/types/post";
 
 export const PostCard: React.FC<{
   post: Post;
@@ -42,11 +42,11 @@ export const PostCard: React.FC<{
         <div className="flex gap-2">
           {post.tags.map((tag) => (
             <Badge
-              key={tag}
+              key={tag.id}
               variant="outline"
               className="text-xs border-stone-200 text-stone-400 rounded-none"
             >
-              {tag}
+              {tag.name}
             </Badge>
           ))}
         </div>

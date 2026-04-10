@@ -1,7 +1,17 @@
 import React from "react";
-import type { Post } from "../mocks/posts";
 
-export const PostsContext = React.createContext<{
-  posts: Post[];
+export interface PostSummary {
+  id: string;
+  slug: string;
+  title: string;
+}
+
+export interface PostsContextValue {
+  posts: PostSummary[];
   categories: string[];
-} | null>(null);
+}
+
+export const PostsContext = React.createContext<PostsContextValue | null>({
+  posts: [],
+  categories: [],
+});

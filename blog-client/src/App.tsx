@@ -7,14 +7,16 @@ import {
   useLocation,
 } from "react-router-dom";
 
-import { POSTS, CATEGORIES } from "./mocks/posts";
-import { PostsContext } from "./contexts/PostsContext";
+import { AuthProvider } from "./providers/AuthProvider";
+import { useAuth } from "./hooks/useAuth";
 import HomePage from "./pages/HomePage";
 import AboutPage from "./pages/AboutPage";
 import ArticlePage from "./pages/ArticlePage";
+import LoginPage from "./pages/LoginPage";
 
 function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const { isAuthenticated, user, logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-white font-sans">
@@ -43,12 +45,31 @@ function Layout({ children }: { children: React.ReactNode }) {
             >
               About
             </Link>
-            <button
-              type="button"
-              className="bg-stone-900 text-white rounded-none text-xs tracking-widest uppercase font-semibold px-4 py-2"
-            >
-              Subscribe
-            </button>
+
+            {isAuthenticated && user ? (
+              <div className="flex items-center gap-3">
+                <span className="hidden sm:inline text-xs text-stone-500">
+                  {user.name}
+                </span>
+                <button
+                  type="button"
+                  onClick={logout}
+                  className="bg-stone-900 text-white rounded-none text-xs tracking-widest uppercase font-semibold px-4 py-2 hover:bg-amber-700 transition-colors"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <Link
+                to="/login"
+                className="bg-stone-900 text-white rounded-none text-xs tracking-widest uppercase font-semibold px-4 py-2 hover:bg-amber-700 transition-colors"
+                aria-current={
+                  location.pathname === "/login" ? "page" : undefined
+                }
+              >
+                Login
+              </Link>
+            )}
           </nav>
         </div>
       </header>
@@ -71,12 +92,13 @@ function Layout({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <PostsContext.Provider value={{ posts: POSTS, categories: CATEGORIES }}>
+    <AuthProvider>
       <BrowserRouter>
         <Layout>
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/login" element={<LoginPage />} />
             <Route path="/post/:slug" element={<ArticlePage />} />
             <Route path="/:slug" element={<Navigate to="/" replace />} />
             <Route
@@ -101,6 +123,6 @@ export default function App() {
           </Routes>
         </Layout>
       </BrowserRouter>
-    </PostsContext.Provider>
+    </AuthProvider>
   );
 }

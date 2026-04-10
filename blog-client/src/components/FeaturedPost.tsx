@@ -2,7 +2,7 @@ import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { type Post } from "@/mocks/posts";
+import type { Post } from "@/types/post";
 
 export const FeaturedPost: React.FC<{
   post: Post;
@@ -60,11 +60,11 @@ export const FeaturedPost: React.FC<{
         <div className="flex flex-wrap gap-2 mt-6">
           {post.tags.map((tag) => (
             <Badge
-              key={tag}
+              key={tag.id}
               variant="outline"
               className="text-xs border-stone-300 text-stone-500 rounded-none"
             >
-              {tag}
+              {tag.name}
             </Badge>
           ))}
         </div>
