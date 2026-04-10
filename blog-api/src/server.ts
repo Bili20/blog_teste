@@ -5,7 +5,6 @@ import prisma from "@/infrastructure/database/prisma";
 const PORT = process.env.PORT ?? 3333;
 
 async function bootstrap() {
-  // Verify database connection before starting
   await prisma.$connect();
   console.log("✅ Database connected");
 
@@ -16,7 +15,6 @@ async function bootstrap() {
     console.log(`   ENV: ${process.env.NODE_ENV ?? "development"}`);
   });
 
-  // Graceful shutdown
   const shutdown = async (signal: string) => {
     console.log(`\n⚠️  ${signal} received — shutting down gracefully`);
     server.close(async () => {

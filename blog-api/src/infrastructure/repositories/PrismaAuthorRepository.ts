@@ -2,7 +2,7 @@ import { PrismaClient } from "@prisma/client";
 import { Author } from "@/domain/entities/Author";
 import {
   IAuthorRepository,
-  CreateAuthorData,
+  CreateAuthorRepositoryData,
   UpdateAuthorData,
 } from "@/domain/interfaces/repositories/IAuthorRepository";
 
@@ -19,7 +19,7 @@ export class PrismaAuthorRepository implements IAuthorRepository {
     return this.prisma.author.findUnique({ where: { id } });
   }
 
-  async create(data: CreateAuthorData): Promise<Author> {
+  async create(data: CreateAuthorRepositoryData): Promise<Author> {
     return this.prisma.author.create({ data });
   }
 

@@ -10,16 +10,40 @@ datasource db {
 }
 
 model Author {
-  id        String   @id @default(cuid())
-  name      String
-  initials  String
-  bio       String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(cuid())
+  name         String
+  initials     String
+  bio          String?
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   posts Post[]
+  roles AuthorRole[]
 
   @@map("authors")
+}
+
+model Role {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  authors AuthorRole[]
+
+  @@map("roles")
+}
+
+model AuthorRole {
+  authorId String
+  roleId   String
+
+  author Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  role   Role   @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([authorId, roleId])
+  @@map("author_roles")
 }
 
 model Tag {

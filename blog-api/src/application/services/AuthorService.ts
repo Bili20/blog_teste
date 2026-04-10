@@ -1,11 +1,17 @@
+import bcrypt from "bcryptjs";
 import { Author } from "@/domain/entities/Author";
 import {
   IAuthorRepository,
-  CreateAuthorData,
+  CreateAuthorRepositoryData,
   UpdateAuthorData,
 } from "@/domain/interfaces/repositories/IAuthorRepository";
-import { IAuthorService } from "@/domain/interfaces/services/IAuthorService";
+import {
+  IAuthorService,
+  CreateAuthorInput,
+} from "@/domain/interfaces/services/IAuthorService";
 import { NotFoundError } from "@/shared/errors/AppError";
+
+const BCRYPT_SALT_ROUNDS = 10;
 
 export class AuthorService implements IAuthorService {
   constructor(private readonly authorRepository: IAuthorRepository) {}
@@ -20,8 +26,18 @@ export class AuthorService implements IAuthorService {
     return author;
   }
 
-  async createAuthor(data: CreateAuthorData): Promise<Author> {
-    return this.authorRepository.create(data);
+  async createAuthor(data: CreateAuthorInput): Promise<Author> {
+    const passwordHash = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
+
+    const repositoryData: CreateAuthorRepositoryData = {
+      name: data.name,
+      initials: data.initials,
+      bio: data.bio,
+      email: data.email,
+      passwordHash,
+    };
+
+    return this.authorRepository.create(repositoryData);
   }
 
   async updateAuthor(id: string, data: UpdateAuthorData): Promise<Author> {

@@ -6,9 +6,8 @@ export function errorHandler(
   err: Error,
   _req: Request,
   res: Response,
-  _next: NextFunction
+  _next: NextFunction,
 ): void {
-  // Zod validation errors
   if (err instanceof ZodError) {
     res.status(422).json({
       error: "Validation Error",
@@ -20,7 +19,6 @@ export function errorHandler(
     return;
   }
 
-  // Known application errors
   if (err instanceof AppError) {
     res.status(err.statusCode).json({
       error: err.name,
@@ -29,7 +27,6 @@ export function errorHandler(
     return;
   }
 
-  // Unknown errors — don't leak internals in production
   console.error("[Unhandled Error]", err);
 
   res.status(500).json({

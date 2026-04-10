@@ -1,9 +1,13 @@
 import { Tag } from "@/domain/entities/Tag";
-import { CreateTagData } from "@/domain/interfaces/repositories/ITagRepository";
+
+export interface CreateTagInput {
+  name: string;
+  slug?: string;
+}
 
 export interface ITagService {
   listTags(): Promise<Tag[]>;
   getTag(id: string): Promise<Tag>;
-  createTag(data: CreateTagData): Promise<Tag>;
+  createTag(data: CreateTagInput): Promise<Tag>;
   deleteTag(id: string): Promise<void>;
 }

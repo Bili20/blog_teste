@@ -3,15 +3,17 @@ import { Author } from "@/domain/entities/Author";
 export interface IAuthorRepository {
   findAll(): Promise<Author[]>;
   findById(id: string): Promise<Author | null>;
-  create(data: CreateAuthorData): Promise<Author>;
+  create(data: CreateAuthorRepositoryData): Promise<Author>;
   update(id: string, data: UpdateAuthorData): Promise<Author>;
   delete(id: string): Promise<void>;
 }
 
-export interface CreateAuthorData {
+export interface CreateAuthorRepositoryData {
   name: string;
   initials: string;
   bio?: string;
+  email: string;
+  passwordHash: string;
 }
 
 export interface UpdateAuthorData {

@@ -1,5 +1,14 @@
 import { z } from "zod";
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+export const loginSchema = z.object({
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+});
+
+export type LoginInput = z.infer<typeof loginSchema>;
+
 // ── Post ──────────────────────────────────────────────────────────────────────
 
 export const createPostSchema = z.object({
@@ -47,6 +56,8 @@ export const createAuthorSchema = z.object({
     .max(3)
     .regex(/^[A-Z]+$/, "Initials must be uppercase letters"),
   bio: z.string().max(500).optional(),
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
 export const updateAuthorSchema = createAuthorSchema.partial();

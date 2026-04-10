@@ -1,10 +1,10 @@
 import slugify from "slugify";
 import { Tag } from "@/domain/entities/Tag";
+import { ITagRepository } from "@/domain/interfaces/repositories/ITagRepository";
 import {
-  ITagRepository,
-  CreateTagData,
-} from "@/domain/interfaces/repositories/ITagRepository";
-import { ITagService } from "@/domain/interfaces/services/ITagService";
+  ITagService,
+  CreateTagInput,
+} from "@/domain/interfaces/services/ITagService";
 import { NotFoundError, ConflictError } from "@/shared/errors/AppError";
 
 export class TagService implements ITagService {
@@ -20,7 +20,7 @@ export class TagService implements ITagService {
     return tag;
   }
 
-  async createTag(data: CreateTagData): Promise<Tag> {
+  async createTag(data: CreateTagInput): Promise<Tag> {
     const slug =
       data.slug ||
       slugify(data.name, { lower: true, strict: true, trim: true });

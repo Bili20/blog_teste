@@ -6,3 +6,9 @@ export interface Author {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface AuthorWithCredentials extends Author {
+  email: string;
+  passwordHash: string;
+  roles: string[];
+}

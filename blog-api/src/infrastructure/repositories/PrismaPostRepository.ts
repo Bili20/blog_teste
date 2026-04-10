@@ -35,7 +35,9 @@ function mapPostSummary(raw: any): PostSummary {
 export class PrismaPostRepository implements IPostRepository {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async findAll(options: FindAllPostsOptions = {}): Promise<PaginatedResult<PostSummary>> {
+  async findAll(
+    options: FindAllPostsOptions = {},
+  ): Promise<PaginatedResult<PostSummary>> {
     const {
       category,
       tagSlug,
@@ -111,11 +113,12 @@ export class PrismaPostRepository implements IPostRepository {
   }
 
   async create(data: CreatePostData): Promise<Post> {
-    const { tagSlugs = [], ...rest } = data;
+    const { tagSlugs = [], slug, ...rest } = data;
 
     const post = await this.prisma.post.create({
       data: {
         ...rest,
+        slug: slug as string,
         tags: {
           create: tagSlugs.map((slug) => ({
             tag: { connect: { slug } },
