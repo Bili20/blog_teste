@@ -19,8 +19,9 @@ model Author {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  posts Post[]
-  roles AuthorRole[]
+  posts         Post[]
+  roles         AuthorRole[]
+  refreshTokens RefreshToken[]
 
   @@map("authors")
 }
@@ -88,4 +89,19 @@ model PostTag {
 
   @@id([postId, tagId])
   @@map("post_tags")
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  authorId String
+  author   Author @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([authorId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
 }

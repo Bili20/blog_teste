@@ -1,6 +1,7 @@
 import "express-async-errors";
 import express, { Application, Request, Response } from "express";
 import cors from "cors";
+import { parse as parseCookie } from "cookie";
 
 // Infrastructure
 import prisma from "@/infrastructure/database/prisma";
@@ -35,8 +36,20 @@ export function createApp(): Application {
   const app = express();
 
   // ── Global middlewares ──────────────────────────────────────────────────────
-  app.use(cors());
+  app.use(
+    cors({
+      origin: true,
+      credentials: true,
+    }),
+  );
   app.use(express.json());
+  app.use((req, _res, next) => {
+    const cookieHeader = req.headers.cookie;
+
+    req.cookies = cookieHeader ? parseCookie(cookieHeader) : {};
+
+    next();
+  });
   app.use(requestLogger);
 
   // ── Dependency injection (manual, no container needed at this scale) ────────

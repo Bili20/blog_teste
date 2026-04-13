@@ -375,9 +375,39 @@ significantly, consider `tsyringe` or `inversify`.
 **Cascade behaviour:**
 - `post_tags`: delete cascades from both `posts` and `tags`.
 - `author_roles`: delete cascades from both `authors` and `roles`.
+- `refresh_tokens`: delete cascades from `authors`.
 
 **Migrations** live in `prisma/migrations/` and are version-controlled.
 Never edit a migration file after it has been applied to any shared environment.
+
+### Refresh token persistence
+
+The auth module now persists refresh tokens in a dedicated `refresh_tokens` table:
+
+```text
+┌────────────────────┐
+│   refresh_tokens   │
+│────────────────────│
+│ id (PK)            │
+│ tokenHash          │◄── UNIQUE
+│ expiresAt          │
+│ createdAt          │
+│ revokedAt          │
+│ authorId (FK)      │
+└─────────┬──────────┘
+          │ N
+          │
+          │ 1
+┌─────────▼──────────┐
+│      authors       │
+└────────────────────┘
+```
+
+**Important rules:**
+- raw refresh tokens are **not** stored in the database
+- only a SHA-256 `tokenHash` is persisted
+- refresh tokens can be revoked by setting `revokedAt`
+- expired refresh tokens are rejected even if they were never explicitly revoked
 
 ---
 
@@ -389,7 +419,10 @@ Base URL: `http://localhost:3333/api`
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/auth/login` | — | Returns JWT + author info |
+| `POST` | `/auth/login` | — | Returns access token and sets refresh token cookie |
+| `POST` | `/auth/refresh` | — | Rotates refresh token from cookie (or request body fallback) and returns a new access token |
+| `POST` | `/auth/logout` | — | Revokes the current refresh token and clears the refresh token cookie |
+| `GET` | `/auth/me` | `JWT` | Returns the authenticated current user |
 
 #### Posts
 
@@ -472,6 +505,54 @@ Base URL: `http://localhost:3333/api`
 ### 2.8 Auth System
 
 > Full detail is in `AUTH.md`. This section is a structural summary.
+
+The auth module now uses a **short-lived access token + persisted refresh token**
+pattern at the API contract level.
+
+Current flow:
+1. `POST /auth/login`
+   - validates credentials
+   - returns:
+     - `accessToken`
+   - sets the refresh token as an **HTTP-only cookie**
+   - stores only the hashed refresh token in `refresh_tokens`
+2. `POST /auth/refresh`
+   - reads the refresh token from the cookie by default
+   - still accepts request-body fallback for compatibility
+   - hashes it
+   - validates the stored record
+   - rejects revoked or expired tokens
+   - revokes the old refresh token record
+   - issues a new access token
+   - rotates the refresh token cookie
+3. `POST /auth/logout`
+   - reads the current refresh token
+   - revokes it if present and valid
+   - clears the refresh token cookie
+4. `GET /auth/me`
+   - still uses the access token only
+   - should remain DB-backed for current profile data
+
+**Refresh token transport rule:**
+- refresh tokens should be transported primarily through an **HTTP-only cookie**
+- the API should not require frontend JavaScript to read or persist the refresh token directly
+- request-body refresh token support exists only as a compatibility fallback during transition
+
+**Refresh token rotation rule:**
+- every successful refresh invalidates the previous refresh token
+- the old token cannot be reused after rotation
+
+**Cookie and transport rules:**
+- refresh token cookie path: `/api/auth`
+- cookie should be `httpOnly`
+- cookie should be `sameSite=strict`
+- cookie should be `secure` in production
+- auth CORS must allow credentials so browsers can send the refresh token cookie
+
+**Environment variables in use:**
+- `JWT_SECRET`
+- `JWT_EXPIRES_IN`
+- `REFRESH_TOKEN_EXPIRES_IN_DAYS`
 
 **Flow:**
 ```
@@ -634,7 +715,7 @@ blog-client/
 │   │
 │   ├── services/
 │   │   ├── api.ts                   # Configured axios instance (baseURL + auth header)
-│   │   ├── authService.ts           # login(), getCurrentUser()
+│   │   ├── authService.ts           # login(), refreshToken(), getCurrentUser()
 │   │   ├── authorService.ts         # listAuthors(), createAuthor(), updateAuthor(), deleteAuthor()
 │   │   ├── postService.ts           # listPosts(), createPost(), updatePost(), deletePost()
 │   │   └── tagService.ts            # listTags(), createTag(), deleteTag()
@@ -765,6 +846,13 @@ Current admin UX relies heavily on these primitives instead of custom controls:
 - current provider compatibility means server-side post filtering should prefer
   provider-safe Prisma string filters and avoid assuming `mode: "insensitive"`
   support in repository queries
+
+**Credentialed auth transport:**
+- backend CORS is configured with `credentials: true`
+- auth cookie transport depends on browsers being allowed to send credentials
+- refresh token cookie parsing happens in a lightweight request middleware before routes
+- access tokens still travel through the `Authorization: Bearer <token>` header
+- refresh tokens now travel primarily through the auth cookie instead of being exposed in normal JSON responses
 
 **Admin feedback improvements:**
 - `App.tsx` mounts the shared `Toaster` from `src/components/ui/sonner.tsx`

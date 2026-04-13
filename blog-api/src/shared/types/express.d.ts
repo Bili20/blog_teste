@@ -9,6 +9,7 @@ declare global {
         iat?: number;
         exp?: number;
       };
+      cookies?: Record<string, string>;
     }
   }
 }

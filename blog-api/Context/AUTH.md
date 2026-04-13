@@ -7,14 +7,18 @@ Bearer-token strategy. Authorization is handled via a **role-based access contro
 (RBAC)** system backed by a dedicated `roles` table, linked to `authors` through a
 many-to-many join table (`author_roles`).
 
-The current auth flow follows a **token + current-user** pattern:
+The current auth flow follows an **access-token + refresh-token + current-user**
+pattern:
 
-1. `POST /api/auth/login` validates credentials and returns only an `accessToken`
-2. `GET /api/auth/me` validates the token and returns the authenticated user
-3. Protected routes use `authenticate` + `requireRole(...)`
+1. `POST /api/auth/login` validates credentials and returns an `accessToken`
+2. the backend also sets the `refreshToken` as an **HTTP-only cookie**
+3. `POST /api/auth/refresh` reads the refresh token (preferably from the cookie), rotates it, and returns a new access token
+4. `POST /api/auth/logout` revokes the current refresh token and clears the cookie
+5. `GET /api/auth/me` validates the access token and returns the authenticated user
+6. Protected routes use `authenticate` + `requireRole(...)`
 
-This keeps the login response minimal and makes the frontend fetch the current
-user explicitly.
+This keeps the access token available to the client while moving refresh token
+transport to a safer cookie-based mechanism.
 
 ---
 
@@ -23,8 +27,14 @@ user explicitly.
 ```text
 Author ────< AuthorRole >──── Role
  id              authorId         id
- email           roleId           name   (e.g. "admin")
+ email           roleId           name   (e.g. "admin", "author")
  passwordHash
+
+Author ────< RefreshToken
+ id              authorId
+                 tokenHash
+                 expiresAt
+                 revokedAt
 ```
 
 - An `Author` can hold **multiple roles** (many-to-many).
@@ -38,13 +48,20 @@ Author ────< AuthorRole >──── Role
 
 | Layer | Responsibility |
 |---|---|
-| **Domain** | `Auth.ts` (`JwtPayload`, `LoginResponse`, `CurrentUserResponse`), `AuthorWithCredentials`, `IAuthRepository`, `IAuthService` |
-| **Application** | `AuthService` — validates credentials, signs JWT |
-| **Infrastructure** | `PrismaAuthRepository` — fetches author + roles from the database |
+| **Domain** | `Auth.ts` (`JwtPayload`, `LoginResponse`, `RefreshTokenResponse`, `CurrentUserResponse`), `AuthorWithCredentials`, `IAuthRepository`, `IAuthService` |
+| **Application** | `AuthService` — validates credentials, signs access tokens, issues refresh tokens, rotates refresh tokens |
+| **Infrastructure** | `PrismaAuthRepository` — fetches author + roles from the database and persists refresh token records |
 | **Presentation** | `AuthController`, `auth.routes.ts`, decorators |
 
-> **Rule:** No JWT or bcrypt logic outside `AuthService` and the auth decorators.
-> The domain layer must never import `jsonwebtoken` or `bcryptjs` directly.
+> **Rule:** No JWT, bcrypt, token hashing, or refresh-token generation logic
+> outside `AuthService` and the auth decorators.
+> The domain layer must never import `jsonwebtoken`, `bcryptjs`, or `crypto`
+> directly.
+>
+> **Prisma client regeneration rule:** Whenever the Prisma schema changes in a way
+> that affects auth persistence types (for example adding `RefreshToken` or new
+> auth-related fields/relations), the Prisma client must be regenerated before
+> repository code will type-check correctly.
 
 ---
 
@@ -67,8 +84,9 @@ Author ────< AuthorRole >──── Role
 
 | Variable | Description | Default |
 |---|---|---|
-| `JWT_SECRET` | Signing secret — **must be set in production** | — |
-| `JWT_EXPIRES_IN` | Token lifespan (any `jsonwebtoken`-compatible value) | `7d` |
+| `JWT_SECRET` | Signing secret for access tokens — **must be set in production** | — |
+| `JWT_EXPIRES_IN` | Access token lifespan (any `jsonwebtoken`-compatible value) | `7d` |
+| `REFRESH_TOKEN_EXPIRES_IN_DAYS` | Refresh token lifespan in days | `30` |
 
 > **Rule:** `JWT_SECRET` must be at least 32 random characters in production.
 > Never commit a real secret to version control.
@@ -79,7 +97,8 @@ Author ────< AuthorRole >──── Role
 
 ### `POST /api/auth/login`
 
-Validates credentials and returns only the access token.
+Validates credentials, returns a new access token, and sets a refresh token
+cookie.
 
 **Request body:**
 ```json
@@ -96,6 +115,11 @@ Validates credentials and returns only the access token.
 }
 ```
 
+**Set-Cookie:**
+```text
+refreshToken=<opaque-refresh-token>; HttpOnly; SameSite=Strict; Path=/api/auth; Max-Age=2592000
+```
+
 **Error responses:**
 
 | Status | Reason |
@@ -105,6 +129,93 @@ Validates credentials and returns only the access token.
 
 > **Security rule:** Both "email not found" and "wrong password" return the same
 > `401 Invalid credentials` message. Never reveal which field is wrong.
+
+---
+
+### `POST /api/auth/refresh`
+
+Rotates the current refresh token and returns a fresh access token while setting
+a new refresh token cookie.
+
+**Preferred transport:**
+```text
+Cookie: refreshToken=<opaque-refresh-token>
+```
+
+**Optional fallback request body:**
+```json
+{
+  "refreshToken": "<opaque-refresh-token>"
+}
+```
+
+**Response `200`:**
+```json
+{
+  "accessToken": "<jwt>"
+}
+```
+
+**Set-Cookie:**
+```text
+refreshToken=<new-opaque-refresh-token>; HttpOnly; SameSite=Strict; Path=/api/auth; Max-Age=2592000
+```
+
+**Error responses:**
+
+| Status | Reason |
+|---|---|
+| `401 Unauthorized` | Missing, invalid, revoked, or expired refresh token |
+| `422 Validation Error` | Malformed request body |
+
+### Rotation rule
+
+Refresh tokens are **single-use**:
+
+1. client sends the current refresh token, preferably through the cookie
+2. server hashes it and looks it up in `refresh_tokens`
+3. server rejects it if it is missing, revoked, or expired
+4. server revokes the current stored token
+5. server issues a new access token
+6. server issues a new refresh token
+7. server stores only the **hash** of the new refresh token
+8. server sets the new raw refresh token in a fresh HTTP-only cookie
+
+This is a **refresh token rotation** flow. The raw refresh token is never stored
+in plaintext in the database.
+
+---
+
+### `POST /api/auth/logout`
+
+Revokes the current refresh token and clears the refresh token cookie.
+
+**Preferred transport:**
+```text
+Cookie: refreshToken=<opaque-refresh-token>
+```
+
+**Optional fallback request body:**
+```json
+{
+  "refreshToken": "<opaque-refresh-token>"
+}
+```
+
+**Response `204`:**
+- no content
+
+**Set-Cookie:**
+```text
+refreshToken=; HttpOnly; SameSite=Strict; Path=/api/auth; Max-Age=0
+```
+
+**Important behavior**
+- if a refresh token is present and valid, it is revoked
+- if the cookie exists, it is cleared
+- logout does not require an access token in this implementation
+- logout is idempotent from the client perspective because clearing the cookie is
+  always attempted
 
 ---
 
@@ -207,6 +318,8 @@ HTTP request
 ### Auth
 | Method | Path | Guard |
 |---|---|---|
+| `POST` | `/api/auth/refresh` | — |
+| `POST` | `/api/auth/logout` | — |
 | `GET` | `/api/auth/me` | `authenticate` |
 
 ### Posts
@@ -300,13 +413,15 @@ The following items still need hardening:
 1. **Rate limiting is not yet applied**
    - `POST /api/auth/login` should be protected against brute-force attempts
 
-2. **Token revocation is not implemented**
-   - logout only invalidates the session client-side
-   - issued tokens remain valid until expiration
+2. **Refresh token family reuse detection is not implemented**
+   - the current implementation rotates tokens one-by-one
+   - it does not yet detect suspicious reuse patterns across a token family
 
-3. **Refresh tokens are not implemented**
-   - long-lived access tokens are simpler, but less flexible
-   - token rotation is not available yet
+3. **Cookie hardening may still need environment-specific tuning**
+   - current cookie transport uses `httpOnly`, `sameSite`, and environment-aware `secure`
+   - production deployments may still need explicit domain / proxy / HTTPS review
+   - the current implementation rotates tokens one-by-one
+   - it does not yet detect suspicious reuse patterns across a token family
 
 4. **Audit logging is not implemented**
    - login attempts and auth-sensitive actions are not yet recorded
@@ -315,7 +430,7 @@ The following items still need hardening:
    - there is no secure recovery mechanism yet
 
 6. **Session invalidation on role change is not implemented**
-   - if a user's roles change, existing tokens may still carry stale claims until expiration
+   - if a user's roles change, existing access tokens may still carry stale claims until expiration
    - this is another reason `/auth/me` should read from the database
 
 ---
@@ -340,15 +455,16 @@ The following items still need hardening:
 
 ### Medium priority
 
-4. **Add refresh token flow**
-   - create a `refresh_tokens` table
-   - support rotation and invalidation
-   - keep access tokens short-lived
+4. **Add global logout / revoke-all-sessions endpoint**
+   - current logout revokes only the current refresh token
+   - optionally add a route to revoke all refresh tokens for the current author
 
 5. **Add audit logging**
    - log:
      - login success
      - login failure
+     - refresh success
+     - refresh failure
      - logout
      - protected write actions
    - useful fields:
@@ -373,16 +489,69 @@ The following items still need hardening:
 
 ---
 
+## Refresh Token Storage Model
+
+Refresh tokens are stored in the database through a dedicated
+`refresh_tokens` table.
+
+### Stored fields
+
+| Field | Purpose |
+|---|---|
+| `id` | Primary key |
+| `tokenHash` | SHA-256 hash of the raw refresh token |
+| `authorId` | Owner of the token |
+| `expiresAt` | Expiration timestamp |
+| `createdAt` | Creation timestamp |
+| `revokedAt` | Revocation timestamp (`null` when active) |
+
+### Important storage rules
+
+- store only the **hash**, never the raw refresh token
+- refresh tokens are **opaque random strings**, not JWTs
+- a revoked token must never be accepted again
+- an expired token should be treated as invalid and revoked when encountered
+- rotation should revoke the previous token before issuing the next one
+
+## Refresh Token Cookie Transport
+
+The backend now transports refresh tokens primarily through an HTTP-only cookie.
+
+### Cookie attributes
+
+| Attribute | Purpose |
+|---|---|
+| `HttpOnly` | Prevents JavaScript access in the browser |
+| `SameSite=Strict` | Reduces CSRF exposure for cross-site requests |
+| `Path=/api/auth` | Limits cookie scope to auth endpoints |
+| `Secure` | Enabled in production environments |
+| `Max-Age` | Matches refresh token lifetime |
+
+### Transport rules
+
+- `login` sets the refresh token cookie
+- `refresh` reads the cookie first and rotates it on success
+- `logout` clears the cookie even if the client session is already stale
+- request-body refresh token transport is kept only as a compatibility fallback
+- the preferred long-term client integration is cookie-based refresh handling
+
+---
+
 ## Future Considerations
 
-- **Refresh tokens**: Implement a `refresh_tokens` table with rotation logic when
-  the `7d` expiry becomes a UX concern.
+- **Global logout**: Add a route to revoke all refresh tokens for the current author.
+- **Refresh token family tracking**: Add parent/child linkage to detect token reuse.
+- **Cookie domain strategy**: If the deployment spans subdomains, review whether an
+  explicit cookie `domain` attribute is needed.
 - **Password reset**: Add a `password_reset_tokens` table with short-lived, single-use
   tokens.
-- **Token revocation**: For immediate invalidation, add a token blocklist (Redis or
-  a DB table) and check it inside `authenticate`.
+- **Token revocation**: For immediate invalidation of access tokens, add a token
+  blocklist (Redis or a DB table) and check it inside `authenticate`.
 - **Rate limiting**: Apply a rate limiter specifically to `POST /api/auth/login`.
-- **Audit log**: Record login events (timestamp, IP, author ID) in a separate table.
+- **Audit log**: Record login and refresh events (timestamp, IP, author ID) in a separate table.
 - **Current-user DB lookup**: Keep `/auth/me` backed by the database, not only by JWT claims.
+- **Prisma workflow discipline**: After any schema change that affects auth models,
+  run Prisma generation before expecting repository types such as `prisma.refreshToken`
+  to exist in TypeScript.
 
 ---
