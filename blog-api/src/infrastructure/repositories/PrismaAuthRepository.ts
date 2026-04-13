@@ -17,8 +17,40 @@ export class PrismaAuthRepository implements IAuthRepository {
       },
     });
 
-    if (!author) return null;
+    return author ? this.mapAuthorWithCredentials(author) : null;
+  }
 
+  async findById(id: string): Promise<AuthorWithCredentials | null> {
+    const author = await this.prisma.author.findUnique({
+      where: { id },
+      include: {
+        roles: {
+          include: {
+            role: true,
+          },
+        },
+      },
+    });
+
+    return author ? this.mapAuthorWithCredentials(author) : null;
+  }
+
+  private mapAuthorWithCredentials(author: {
+    id: string;
+    name: string;
+    initials: string;
+    bio: string | null;
+    email: string;
+    passwordHash: string;
+    createdAt: Date;
+    updatedAt: Date;
+    roles: Array<{
+      role: {
+        id: string;
+        name: string;
+      };
+    }>;
+  }): AuthorWithCredentials {
     return {
       id: author.id,
       name: author.name,

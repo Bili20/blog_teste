@@ -135,7 +135,7 @@ export default function HomePage() {
   }, [activeCategory, posts, searchQuery]);
 
   const longReadPosts = useMemo(() => {
-    return posts.slice(0, 8);
+    return posts.slice(0, 4);
   }, [posts]);
 
   const handleRead = async (slug: string) => {

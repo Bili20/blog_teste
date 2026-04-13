@@ -2,7 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { IAuthRepository } from "@/domain/interfaces/repositories/IAuthRepository";
 import { IAuthService } from "@/domain/interfaces/services/IAuthService";
-import { LoginResponse } from "@/domain/entities/Auth";
+import { CurrentUserResponse, LoginResponse } from "@/domain/entities/Auth";
 import { UnauthorizedError } from "@/shared/errors/AppError";
 
 export class AuthService implements IAuthService {
@@ -30,6 +30,7 @@ export class AuthService implements IAuthService {
     const payload = {
       sub: author.id,
       email: author.email,
+      name: author.name,
       roles: author.roles,
     };
 
@@ -40,12 +41,21 @@ export class AuthService implements IAuthService {
 
     return {
       accessToken,
-      author: {
-        id: author.id,
-        name: author.name,
-        email: author.email,
-        roles: author.roles,
-      },
+    };
+  }
+
+  async getCurrentUser(authorId: string): Promise<CurrentUserResponse> {
+    const author = await this.authRepository.findById(authorId);
+
+    if (!author) {
+      throw new UnauthorizedError("Authenticated user not found");
+    }
+
+    return {
+      id: author.id,
+      name: author.name,
+      email: author.email,
+      roles: author.roles,
     };
   }
 }

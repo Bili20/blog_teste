@@ -12,11 +12,18 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   accessToken: string;
-  author: AuthenticatedUser;
+}
+
+export interface CurrentUserResponse {
+  id: string;
+  name: string;
+  email: string;
+  roles: string[];
 }
 
 export interface AuthState {
   accessToken: string | null;
   user: AuthenticatedUser | null;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }

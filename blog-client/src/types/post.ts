@@ -54,20 +54,6 @@ export interface ListPostsParams {
   limit?: number;
 }
 
-export interface PostFormValues {
-  title: string;
-  subtitle: string;
-  excerpt: string;
-  body: string;
-  category: PostCategory;
-  readTime: string;
-  slug?: string;
-  featured: boolean;
-  published: boolean;
-  authorId: string;
-  tagSlugs: string[];
-}
-
 export interface CreatePostRequest {
   title: string;
   subtitle: string;
@@ -82,16 +68,18 @@ export interface CreatePostRequest {
   tagSlugs?: string[];
 }
 
-export interface UpdatePostRequest {
-  title?: string;
-  subtitle?: string;
-  excerpt?: string;
-  body?: string;
-  category?: PostCategory;
-  readTime?: string;
+export type UpdatePostRequest = Partial<CreatePostRequest>;
+
+export interface PostFormValues {
+  title: string;
+  subtitle: string;
+  excerpt: string;
+  body: string;
+  category: PostCategory;
+  readTime: string;
   slug?: string;
-  featured?: boolean;
-  published?: boolean;
-  authorId?: string;
-  tagSlugs?: string[];
+  featured: boolean;
+  published: boolean;
+  authorId: string;
+  tagSlugs: string[];
 }

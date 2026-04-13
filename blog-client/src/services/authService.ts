@@ -11,24 +11,34 @@ const AUTH_USER_STORAGE_KEY = "blog.auth.user";
 export async function login(credentials: LoginRequest): Promise<LoginResponse> {
   try {
     const response = await api.post<LoginResponse>("/auth/login", credentials);
-    persistSession(response.data);
+    persistAccessToken(response.data.accessToken);
     return response.data;
   } catch (error) {
     throw mapAuthError(error);
   }
 }
 
+export async function getCurrentUser(): Promise<AuthenticatedUser> {
+  try {
+    const response = await api.get<AuthenticatedUser>("/auth/me");
+    persistUser(response.data);
+    return response.data;
+  } catch (error) {
+    throw mapAuthError(error);
+  }
+}
+
+export function persistAccessToken(accessToken: string): void {
+  window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, accessToken);
+}
+
+export function persistUser(user: AuthenticatedUser): void {
+  window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
+}
+
 export function logout(): void {
   window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
   window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
-}
-
-export function persistSession(session: LoginResponse): void {
-  window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, session.accessToken);
-  window.localStorage.setItem(
-    AUTH_USER_STORAGE_KEY,
-    JSON.stringify(session.author),
-  );
 }
 
 export function getStoredAccessToken(): string | null {
@@ -48,20 +58,6 @@ export function getStoredUser(): AuthenticatedUser | null {
     window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
     return null;
   }
-}
-
-export function getStoredSession(): LoginResponse | null {
-  const accessToken = getStoredAccessToken();
-  const user = getStoredUser();
-
-  if (!accessToken || !user) {
-    return null;
-  }
-
-  return {
-    accessToken,
-    author: user,
-  };
 }
 
 export function isAuthenticated(): boolean {

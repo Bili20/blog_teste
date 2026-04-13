@@ -395,13 +395,14 @@ Base URL: `http://localhost:3333/api`
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `GET` | `/posts` | — | List posts (paginated, filterable) |
+| `GET` | `/posts` | — | List public posts (paginated, filterable) |
 | `GET` | `/posts/featured` | — | Get the featured post |
 | `GET` | `/posts/slug/:slug` | — | Get post by slug |
 | `GET` | `/posts/:id` | — | Get post by ID |
-| `POST` | `/posts` | JWT + admin | Create post |
-| `PATCH` | `/posts/:id` | JWT + admin | Update post |
-| `DELETE` | `/posts/:id` | JWT + admin | Delete post |
+| `GET` | `/posts/manage` | `JWT + admin \| author` | List managed posts with backend ownership-aware pagination |
+| `POST` | `/posts` | `JWT + admin \| author` | Create post |
+| `PATCH` | `/posts/:id` | `JWT + admin \| author` | Update post |
+| `DELETE` | `/posts/:id` | `JWT + admin \| author` | Delete post |
 
 **`GET /posts` query parameters:**
 
@@ -414,18 +415,42 @@ Base URL: `http://localhost:3333/api`
 | `page` | `number` | Default `1` |
 | `limit` | `number` | Default `10`, max `100` |
 
+**`GET /posts/manage` query parameters:**
+
+| Param | Type | Description |
+|---|---|---|
+| `category` | `Essay \| Practice \| Work \| Tools` | Filter by category |
+| `tag` | `string` | Filter by tag slug |
+| `search` | `string` | Full-text search (title, subtitle, excerpt) |
+| `published` | `boolean` | Optional; when omitted, returns both drafts and published posts for management |
+| `page` | `number` | Default `1` |
+| `limit` | `number` | Default `10`, max `100` |
+
+**Ownership-aware management listing rule:**
+- `admin` receives paginated results across all posts
+- `author` receives paginated results only for posts where `post.authorId === req.user.sub`
+- ownership filtering for `/posts/manage` is enforced in the backend service layer before pagination results are returned to the client
+- `published` filtering for `/posts/manage` is optional:
+  - when `published=true`, only published posts are returned
+  - when `published=false`, only drafts are returned
+  - when `published` is omitted, both drafts and published posts are included in the managed result set
+- route declaration order matters: `/posts/manage` must be registered before `/:id`, otherwise Express will treat `"manage"` as a dynamic post ID and the protected management listing will never be reached
+- newly created authors intended for editorial access should receive the default `author` role assignment during creation, otherwise they can authenticate but will not be allowed to manage posts
+- Prisma string filters using `mode: "insensitive"` are not universally supported across all configured providers in this project setup
+- for the current SQLite/libsql-backed configuration, post repository filtering should avoid relying on Prisma's `mode: "insensitive"` option unless provider support is explicitly confirmed
+
 #### Authors
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
 | `GET` | `/authors` | — | List all authors |
 | `GET` | `/authors/:id` | — | Get author by ID |
-| `POST` | `/authors` | — | Create author |
-| `PATCH` | `/authors/:id` | — | Update author |
-| `DELETE` | `/authors/:id` | — | Delete author |
+| `POST` | `/authors` | `JWT + admin` | Create author |
+| `PATCH` | `/authors/:id` | `JWT + admin` | Update author |
+| `DELETE` | `/authors/:id` | `JWT + admin` | Delete author |
 
-> **Note:** Author write routes are currently unprotected. They should receive the
-> same `authenticate + requireRole("admin")` decorators in a future iteration.
+> `PATCH /authors/:id` only updates `name`, `initials`, and `bio`.
+> Email and password changes are not exposed through this endpoint.
 
 #### Tags
 
@@ -566,31 +591,61 @@ blog-client/
 │   ├── index.css                    # Tailwind directives + CSS variables
 │   │
 │   ├── pages/
-│   │   ├── HomePage.tsx             # Archive, search, category filter
+│   │   ├── HomePage.tsx             # Post archive with search + category filter
 │   │   ├── ArticlePage.tsx          # Full post reader
-│   │   └── AboutPage.tsx            # Static about + newsletter form
+│   │   ├── AboutPage.tsx            # Static about page
+│   │   ├── LoginPage.tsx            # Auth login form
+│   │   └── admin/
+│   │       ├── CreatePostPage.tsx   # Create a new post (admin + author)
+│   │       ├── EditPostPage.tsx     # Edit an existing post (admin + author)
+│   │       ├── ManagePostsPage.tsx  # List and manage posts (admin + author)
+│   │       ├── authors/
+│   │       │   ├── ManageAuthorsPage.tsx  # List and manage authors (admin)
+│   │       │   ├── CreateAuthorPage.tsx   # Create a new author (admin)
+│   │       │   └── EditAuthorPage.tsx     # Edit an existing author (admin)
+│   │       └── tags/
+│   │           ├── ManageTagsPage.tsx     # List and manage tags (admin)
+│   │           └── CreateTagPage.tsx      # Create a new tag (admin)
 │   │
 │   ├── components/
+│   │   ├── AdminPagination.tsx      # Reusable previous/next pagination footer for admin lists
+│   │   ├── AppHeader.tsx            # Shared site header with avatar menu + mobile sheet
+│   │   ├── DeleteConfirmDialog.tsx  # Reusable destructive-action confirmation dialog
 │   │   ├── FeaturedPost.tsx         # Hero card for the featured post
-│   │   ├── Header.tsx               # Sticky top bar (unused — layout is in App.tsx)
+│   │   ├── Header.tsx               # Unused legacy header component
 │   │   ├── PostCard.tsx             # List item card for non-featured posts
+│   │   ├── PostForm.tsx             # Shared create/edit post form
 │   │   └── ui/                      # shadcn/ui generated primitives (don't edit manually)
-│   │       ├── avatar.tsx
-│   │       ├── badge.tsx
-│   │       ├── button.tsx
-│   │       ├── separator.tsx
-│   │       └── ...                  # (full Radix suite)
+│   │       └── ...                  # (full Radix suite, including Sonner toaster wrapper)
 │   │
 │   ├── contexts/
-│   │   └── PostsContext.ts          # React.createContext for posts + categories
+│   │   └── AuthContext.ts           # Auth state shape (token, user, flags)
+│   │
+│   ├── guards/
+│   │   ├── AdminRoute.tsx           # Route guard — admin role only
+│   │   ├── ContentRoute.tsx         # Route guard — admin or author role
+│   │   └── ProtectedRoute.tsx       # Route guard — authenticated only
 │   │
 │   ├── hooks/
-│   │   └── use-toast.ts             # shadcn/ui toast hook
+│   │   └── useAuth.ts               # Consumes AuthContext
 │   │
-│   ├── mocks/
-│   │   └── posts.ts                 # Static post data (pre-API integration)
+│   ├── providers/
+│   │   └── AuthProvider.tsx         # Auth state, login/logout, session bootstrap
 │   │
-│   └── lib/                         # (shadcn/ui utilities)
+│   ├── services/
+│   │   ├── api.ts                   # Configured axios instance (baseURL + auth header)
+│   │   ├── authService.ts           # login(), getCurrentUser()
+│   │   ├── authorService.ts         # listAuthors(), createAuthor(), updateAuthor(), deleteAuthor()
+│   │   ├── postService.ts           # listPosts(), createPost(), updatePost(), deletePost()
+│   │   └── tagService.ts            # listTags(), createTag(), deleteTag()
+│   │
+│   ├── types/
+│   │   ├── auth.ts                  # LoginRequest, AuthenticatedUser, AuthState
+│   │   ├── author.ts                # Author, AuthorSummary
+│   │   ├── post.ts                  # Post, PostSummary, PostFormInput, etc.
+│   │   └── tag.ts                   # Tag, CreateTagRequest
+│   │
+│   └── lib/
 │       └── utils.ts                 # cn() helper (clsx + tailwind-merge)
 │
 ├── public/
@@ -608,23 +663,47 @@ blog-client/
 
 Routes are declared in `App.tsx` inside `<BrowserRouter>`:
 
-| Path | Component | Notes |
+| Path | Component | Guard | Notes |
+|---|---|---|---|
+| `/` | `HomePage` | — | Post archive with search + category filter |
+| `/about` | `AboutPage` | — | Static page |
+| `/login` | `LoginPage` | — | Authentication form |
+| `/post/:slug` | `ArticlePage` | — | Full article reader |
+| `/admin/posts` | `ManagePostsPage` | `ContentRoute` | List + manage posts |
+| `/admin/posts/new` | `CreatePostPage` | `ContentRoute` | Create post form |
+| `/admin/posts/:id/edit` | `EditPostPage` | `ContentRoute` | Edit post form |
+| `/admin/authors` | `ManageAuthorsPage` | `AdminRoute` | List + manage authors |
+| `/admin/authors/new` | `CreateAuthorPage` | `AdminRoute` | Create author form |
+| `/admin/authors/:id/edit` | `EditAuthorPage` | `AdminRoute` | Edit author form |
+| `/admin/tags` | `ManageTagsPage` | `AdminRoute` | List + manage tags |
+| `/admin/tags/new` | `CreateTagPage` | `AdminRoute` | Create tag form |
+| `/:slug` | Redirect to `/` | — | Legacy slug fallback |
+| `*` | Inline 404 | — | |
+
+**Route guards:**
+
+| Guard | File | Permitted roles |
 |---|---|---|
-| `/` | `HomePage` | Post archive with search + category filter |
-| `/about` | `AboutPage` | Static page |
-| `/post/:slug` | `ArticlePage` | Full article reader |
-| `/:slug` | Redirect to `/` | Legacy slug fallback |
-| `*` | Inline 404 | |
+| `ContentRoute` | `src/guards/ContentRoute.tsx` | `admin`, `author` |
+| `AdminRoute` | `src/guards/AdminRoute.tsx` | `admin` |
+| `ProtectedRoute` | `src/guards/ProtectedRoute.tsx` | any authenticated user |
 
 **Layout** is a single `Layout` component defined in `App.tsx` that wraps all
 routes. It renders:
-- A sticky `<header>` with site title + navigation links
+- `AppHeader` as the sticky site header
 - A `<main>` for page content
 - A `<footer>`
 
-The `Header.tsx` component in `src/components/` exists but is **not used** —
-the header lives inline in `App.tsx`'s `Layout` function. Keep in mind when
-refactoring.
+`AppHeader.tsx` centralises authenticated and unauthenticated navigation using
+existing shadcn/ui primitives:
+- `DropdownMenu` for the desktop user menu
+- `Avatar` for the logged-in identity trigger
+- `Badge` for role chips
+- `Sheet` for the mobile navigation drawer
+- `Separator` for grouped mobile navigation sections
+
+The older `Header.tsx` component in `src/components/` still exists but is
+currently unused.
 
 ---
 
@@ -657,11 +736,87 @@ props. No direct context consumption inside components (except ui/).
 **UI primitives** (`src/components/ui/`) — generated by shadcn/ui. Do **not**
 edit these files manually. Customise by wrapping them in a new component.
 
+Current admin UX relies heavily on these primitives instead of custom controls:
+- `Select` for post category and author selection
+- `Dialog` for destructive-action confirmation flows
+- `DropdownMenu` for authenticated desktop navigation
+- `Sheet` for mobile navigation
+- `Badge` for roles, categories, and status chips
+- `Avatar` for the authenticated user trigger
+- `Button` for reusable admin pagination controls
+- `Sonner` for global success/error toast feedback
+- `Select`, `Input`, and checkbox-based tag selection inside the shared post form
+
+**Admin list pagination:**
+- `ManagePostsPage` uses the protected `GET /posts/manage` endpoint with `page` + `limit`
+- `/posts/manage` applies ownership-aware filtering in the backend:
+  - `admin` paginates across all posts
+  - `author` paginates only across owned posts
+- `/posts/manage` also supports optional `published` filtering:
+  - omit `published` to paginate across both drafts and published posts
+  - send `published=true` to paginate only published posts
+  - send `published=false` to paginate only drafts
+- this avoids the previous UX issue where an `author` could land on pages with
+  few or zero visible posts because filtering happened only in the client
+- `ManageAuthorsPage` currently paginates client-side after loading all authors
+- `ManageTagsPage` currently paginates client-side after loading all tags
+- `AdminPagination.tsx` provides the shared previous/next footer used by admin
+  listing screens
+- current provider compatibility means server-side post filtering should prefer
+  provider-safe Prisma string filters and avoid assuming `mode: "insensitive"`
+  support in repository queries
+
+**Admin feedback improvements:**
+- `App.tsx` mounts the shared `Toaster` from `src/components/ui/sonner.tsx`
+- create, update, and delete flows now use toast feedback for success and error states
+- inline error blocks are still kept where useful, but destructive and submit actions
+  now also provide immediate global feedback
+- current toast coverage includes posts, authors, and tags management flows
+
+**Admin post filters:**
+- `ManagePostsPage` supports management-oriented filtering on top of the protected
+  `GET /posts/manage` endpoint
+- current filters include:
+  - `search` for title / subtitle / excerpt matching
+  - `category` for editorial category narrowing
+  - `published` status filtering for `published`, `draft`, or all posts
+- filter changes reset pagination back to page `1` before requesting the next result set
+- filters are applied server-side through query parameters instead of filtering only
+  in the client, which keeps pagination totals accurate for both `admin` and `author`
+
+**Post form rules:**
+- `CreatePostPage` and `EditPostPage` both use the shared `PostForm` component
+- tag options must be loaded for both create and edit flows so the editorial tag
+  selector is available consistently in both screens
+- the `featured` flag is an admin-only capability in the UI and should not be
+  exposed as an editable control for users with only the `author` role
+- backend write handling should also treat `featured` as admin-only so the rule
+  is enforced even if a non-admin client submits the field manually
+
+**Admin author and tag filters:**
+- `ManageAuthorsPage` should support management-oriented filtering for author records
+- recommended author filters:
+  - `search` by `name`, `email`, or `initials`
+  - optional role-based narrowing when role management becomes editable in the UI
+- `ManageTagsPage` should support management-oriented filtering for tag records
+- recommended tag filters:
+  - `search` by `name` or `slug`
+- until dedicated backend pagination/filter endpoints exist for authors and tags,
+  these filters can be applied client-side on top of the current admin lists
+
+**Home page editorial strip:**
+- the `Long reads` strip directly below the header should remain intentionally limited
+  to a small curated set of titles
+- current rule: show only the first `4` post titles in that strip to avoid visual
+  overload and preserve the editorial feel of the header area
+- this strip is intentionally lightweight and should not expand into a second
+  dense navigation bar beneath the main header
+
 **Naming:**
 - Pages: `PascalCase` + `Page` suffix — `HomePage.tsx`
 - Components: `PascalCase` — `PostCard.tsx`
-- Hooks: `camelCase` + `use` prefix — `use-toast.ts`
-- Contexts: `PascalCase` + `Context` suffix — `PostsContext.ts`
+- Hooks: `camelCase` + `use` prefix — `useAuth.ts`
+- Contexts: `PascalCase` + `Context` suffix — `AuthContext.ts`
 
 **Variable naming rule (enforced):** No single-letter variables in callbacks or
 `useMemo`. Use descriptive names:

@@ -57,7 +57,7 @@ export function createApp(): Application {
 
   // ── Routes ──────────────────────────────────────────────────────────────────
   app.use("/api/auth", authRoutes(authController));
-  app.use("/api/posts", postRoutes(postController));
+  app.use("/api/posts", postRoutes(postController, postService));
   app.use("/api/authors", authorRoutes(authorController));
   app.use("/api/tags", tagRoutes(tagController));
 

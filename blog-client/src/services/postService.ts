@@ -58,9 +58,7 @@ const VALID_POST_CATEGORIES: PostCategory[] = [
   "Tools",
 ];
 
-export async function listPosts(
-  params: ListPostsParams = {},
-): Promise<{
+export async function listPosts(params: ListPostsParams = {}): Promise<{
   data: PostSummary[];
   total: number;
   page: number;
@@ -69,6 +67,27 @@ export async function listPosts(
 }> {
   try {
     const response = await api.get<ApiPaginatedPostsResponse>("/posts", {
+      params,
+    });
+
+    return {
+      ...response.data,
+      data: response.data.data.map(normalizePostSummary),
+    };
+  } catch (error) {
+    throw mapPostError(error);
+  }
+}
+
+export async function listManagedPosts(params: ListPostsParams = {}): Promise<{
+  data: PostSummary[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}> {
+  try {
+    const response = await api.get<ApiPaginatedPostsResponse>("/posts/manage", {
       params,
     });
 

@@ -7,16 +7,31 @@ import {
   CreatePostData,
   UpdatePostData,
 } from "@/domain/interfaces/repositories/IPostRepository";
-import { IPostService } from "@/domain/interfaces/services/IPostService";
+import {
+  IPostService,
+  ProtectedPostManagementOptions,
+} from "@/domain/interfaces/services/IPostService";
 import { NotFoundError, ConflictError } from "@/shared/errors/AppError";
 
 export class PostService implements IPostService {
   constructor(private readonly postRepository: IPostRepository) {}
 
   async listPosts(
-    options?: FindAllPostsOptions
+    options?: FindAllPostsOptions,
   ): Promise<PaginatedResult<PostSummary>> {
     return this.postRepository.findAll(options);
+  }
+
+  async listManagedPosts(
+    options: ProtectedPostManagementOptions,
+  ): Promise<PaginatedResult<PostSummary>> {
+    const { currentAuthorId, currentRoles, ...filters } = options;
+    const isAdmin = currentRoles.includes("admin");
+
+    return this.postRepository.findAll({
+      ...filters,
+      authorId: isAdmin ? undefined : currentAuthorId,
+    });
   }
 
   async getPost(id: string): Promise<Post> {
@@ -58,12 +73,16 @@ export class PostService implements IPostService {
       const slugExists = await this.postRepository.existsBySlug(data.slug, id);
       if (slugExists) {
         throw new ConflictError(
-          `A post with slug "${data.slug}" already exists`
+          `A post with slug "${data.slug}" already exists`,
         );
       }
     } else if (data.title) {
       // Auto-regenerate slug when title changes (only if slug not explicitly provided)
-      data.slug = slugify(data.title, { lower: true, strict: true, trim: true });
+      data.slug = slugify(data.title, {
+        lower: true,
+        strict: true,
+        trim: true,
+      });
       const slugExists = await this.postRepository.existsBySlug(data.slug, id);
       if (slugExists) {
         // Don't throw — just keep the old slug

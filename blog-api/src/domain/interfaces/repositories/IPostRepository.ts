@@ -5,6 +5,7 @@ export interface FindAllPostsOptions {
   tagSlug?: string;
   search?: string;
   published?: boolean;
+  authorId?: string;
   page?: number;
   limit?: number;
 }

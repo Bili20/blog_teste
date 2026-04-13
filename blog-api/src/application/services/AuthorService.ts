@@ -9,9 +9,16 @@ import {
   IAuthorService,
   CreateAuthorInput,
 } from "@/domain/interfaces/services/IAuthorService";
-import { NotFoundError } from "@/shared/errors/AppError";
+import {
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+} from "@/shared/errors/AppError";
+import { prisma } from "@/infrastructure/database/prisma";
 
 const BCRYPT_SALT_ROUNDS = 10;
+const ADMIN_ROLE_NAME = "admin";
+const AUTHOR_ROLE_NAME = "author";
 
 export class AuthorService implements IAuthorService {
   constructor(private readonly authorRepository: IAuthorRepository) {}
@@ -22,11 +29,28 @@ export class AuthorService implements IAuthorService {
 
   async getAuthor(id: string): Promise<Author> {
     const author = await this.authorRepository.findById(id);
-    if (!author) throw new NotFoundError("Author");
+
+    if (!author) {
+      throw new NotFoundError("Author");
+    }
+
     return author;
   }
 
   async createAuthor(data: CreateAuthorInput): Promise<Author> {
+    await this.ensureAdminAccess();
+
+    const existingAuthors = await this.authorRepository.findAll();
+    const emailAlreadyExists = existingAuthors.some(
+      (existingAuthor) => existingAuthor.email === data.email,
+    );
+
+    if (emailAlreadyExists) {
+      throw new ConflictError(
+        `An author with email "${data.email}" already exists`,
+      );
+    }
+
     const passwordHash = await bcrypt.hash(data.password, BCRYPT_SALT_ROUNDS);
 
     const repositoryData: CreateAuthorRepositoryData = {
@@ -37,16 +61,49 @@ export class AuthorService implements IAuthorService {
       passwordHash,
     };
 
-    return this.authorRepository.create(repositoryData);
+    const authorRole = await prisma.role.findUnique({
+      where: { name: AUTHOR_ROLE_NAME },
+      select: { id: true },
+    });
+
+    if (!authorRole) {
+      throw new ForbiddenError("Author role not available");
+    }
+
+    const createdAuthor = await this.authorRepository.create(repositoryData);
+
+    await prisma.authorRole.create({
+      data: {
+        authorId: createdAuthor.id,
+        roleId: authorRole.id,
+      },
+    });
+
+    return createdAuthor;
   }
 
   async updateAuthor(id: string, data: UpdateAuthorData): Promise<Author> {
+    await this.ensureAdminAccess();
     await this.getAuthor(id);
+
     return this.authorRepository.update(id, data);
   }
 
   async deleteAuthor(id: string): Promise<void> {
+    await this.ensureAdminAccess();
     await this.getAuthor(id);
+
     await this.authorRepository.delete(id);
+  }
+
+  private async ensureAdminAccess(): Promise<void> {
+    const adminRole = await prisma.role.findUnique({
+      where: { name: ADMIN_ROLE_NAME },
+      select: { id: true },
+    });
+
+    if (!adminRole) {
+      throw new ForbiddenError("Admin role not available");
+    }
   }
 }

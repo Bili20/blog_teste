@@ -6,32 +6,26 @@ import type {
 } from "@/types/auth";
 import { AuthContext } from "@/contexts/AuthContext";
 import {
+  getCurrentUser,
   getStoredAccessToken,
   getStoredUser,
   login as loginRequest,
   logout as clearSession,
+  persistAccessToken,
+  persistUser,
 } from "@/services/authService";
-
-interface AuthContextValue {
-  user: AuthenticatedUser | null;
-  accessToken: string | null;
-  isAuthenticated: boolean;
-  isLoading: boolean;
-  login: (credentials: LoginRequest) => Promise<LoginResponse>;
-  logout: () => void;
-}
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
-interface InitialAuthState {
+interface AuthState {
   user: AuthenticatedUser | null;
   accessToken: string | null;
   isLoading: boolean;
 }
 
-function getInitialAuthState(): InitialAuthState {
+function getInitialAuthState(): AuthState {
   if (typeof window === "undefined") {
     return {
       user: null,
@@ -40,22 +34,9 @@ function getInitialAuthState(): InitialAuthState {
     };
   }
 
-  const storedAccessToken = getStoredAccessToken();
-  const storedUser = getStoredUser();
-
-  if (storedAccessToken && storedUser) {
-    return {
-      accessToken: storedAccessToken,
-      user: storedUser,
-      isLoading: false,
-    };
-  }
-
-  clearSession();
-
   return {
-    user: null,
-    accessToken: null,
+    accessToken: getStoredAccessToken(),
+    user: getStoredUser(),
     isLoading: false,
   };
 }
@@ -63,23 +44,84 @@ function getInitialAuthState(): InitialAuthState {
 export function AuthProvider({
   children,
 }: AuthProviderProps): React.JSX.Element {
-  const [authState, setAuthState] =
-    useState<InitialAuthState>(getInitialAuthState);
+  const [authState, setAuthState] = useState<AuthState>(getInitialAuthState);
 
   const login = useCallback(
     async (credentials: LoginRequest): Promise<LoginResponse> => {
-      const session = await loginRequest(credentials);
+      setAuthState((currentAuthState) => ({
+        ...currentAuthState,
+        isLoading: true,
+      }));
 
-      setAuthState({
-        accessToken: session.accessToken,
-        user: session.author,
-        isLoading: false,
-      });
+      try {
+        const session = await loginRequest(credentials);
 
-      return session;
+        persistAccessToken(session.accessToken);
+
+        const currentUser = await getCurrentUser();
+
+        persistUser(currentUser);
+
+        setAuthState({
+          accessToken: session.accessToken,
+          user: currentUser,
+          isLoading: false,
+        });
+
+        return {
+          accessToken: session.accessToken,
+        };
+      } catch (error) {
+        clearSession();
+        setAuthState({
+          accessToken: null,
+          user: null,
+          isLoading: false,
+        });
+        throw error;
+      }
     },
     [],
   );
+
+  const refreshSession = useCallback(async (): Promise<void> => {
+    const storedAccessToken = getStoredAccessToken();
+
+    if (!storedAccessToken) {
+      clearSession();
+      setAuthState({
+        accessToken: null,
+        user: null,
+        isLoading: false,
+      });
+      return;
+    }
+
+    setAuthState((currentAuthState) => ({
+      ...currentAuthState,
+      accessToken: storedAccessToken,
+      isLoading: true,
+    }));
+
+    try {
+      const currentUser = await getCurrentUser();
+
+      persistUser(currentUser);
+
+      setAuthState({
+        accessToken: storedAccessToken,
+        user: currentUser,
+        isLoading: false,
+      });
+    } catch {
+      clearSession();
+      setAuthState({
+        accessToken: null,
+        user: null,
+        isLoading: false,
+      });
+    }
+  }, []);
 
   const logout = useCallback(() => {
     clearSession();
@@ -91,7 +133,7 @@ export function AuthProvider({
     });
   }, []);
 
-  const contextValue = useMemo<AuthContextValue>(
+  const contextValue = useMemo(
     () => ({
       user: authState.user,
       accessToken: authState.accessToken,
@@ -99,8 +141,9 @@ export function AuthProvider({
       isLoading: authState.isLoading,
       login,
       logout,
+      refreshSession,
     }),
-    [authState, login, logout],
+    [authState, login, logout, refreshSession],
   );
 
   return (

@@ -3,12 +3,12 @@ export interface Author {
   name: string;
   initials: string;
   bio: string | null;
+  email: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export interface AuthorWithCredentials extends Author {
-  email: string;
   passwordHash: string;
   roles: string[];
 }

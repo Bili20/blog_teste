@@ -42,15 +42,15 @@ export class PrismaPostRepository implements IPostRepository {
       category,
       tagSlug,
       search,
-      published = true,
+      published,
+      authorId,
       page = 1,
       limit = 10,
     } = options;
 
-    const where: any = { published };
-
+    const where: any = {};
     if (category) {
-      where.category = { equals: category, mode: "insensitive" };
+      where.category = category;
     }
 
     if (tagSlug) {
@@ -59,10 +59,18 @@ export class PrismaPostRepository implements IPostRepository {
 
     if (search) {
       where.OR = [
-        { title: { contains: search, mode: "insensitive" } },
-        { excerpt: { contains: search, mode: "insensitive" } },
-        { subtitle: { contains: search, mode: "insensitive" } },
+        { title: { contains: search } },
+        { excerpt: { contains: search } },
+        { subtitle: { contains: search } },
       ];
+    }
+
+    if (published !== undefined) {
+      where.published = published;
+    }
+
+    if (authorId) {
+      where.authorId = authorId;
     }
 
     const skip = (page - 1) * limit;

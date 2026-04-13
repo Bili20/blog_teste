@@ -1,15 +1,10 @@
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Link,
-  Navigate,
-  useLocation,
-} from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, Navigate } from "react-router-dom";
 
+import { Toaster } from "./components/ui/sonner";
 import { AuthProvider } from "./providers/AuthProvider";
-import { useAuth } from "./hooks/useAuth";
 import { AdminRoute } from "./guards/AdminRoute";
+import { ContentRoute } from "./guards/ContentRoute";
+import { AppHeader } from "./components/AppHeader";
 import HomePage from "./pages/HomePage";
 import AboutPage from "./pages/AboutPage";
 import ArticlePage from "./pages/ArticlePage";
@@ -17,77 +12,16 @@ import LoginPage from "./pages/LoginPage";
 import CreatePostPage from "@/pages/admin/CreatePostPage";
 import EditPostPage from "@/pages/admin/EditPostPage";
 import ManagePostsPage from "@/pages/admin/ManagePostsPage";
+import CreateTagPage from "./pages/admin/tags/CreateTagPage";
+import ManageTagsPage from "./pages/admin/tags/ManageTagsPage";
+import ManageAuthorsPage from "./pages/admin/authors/ManageAuthorsPage";
+import CreateAuthorPage from "./pages/admin/authors/CreateAuthorPage";
+import EditAuthorPage from "./pages/admin/authors/EditAuthorPage";
 
 function Layout({ children }: { children: React.ReactNode }) {
-  const location = useLocation();
-  const { isAuthenticated, user, logout } = useAuth();
-
   return (
     <div className="min-h-screen bg-white font-sans">
-      <header className="border-b border-stone-200 bg-white sticky top-0 z-50">
-        <div className="max-w-5xl mx-auto px-6 py-4 flex items-center justify-between">
-          <Link
-            to="/"
-            className="font-serif text-2xl font-bold tracking-tight text-stone-900 hover:text-amber-700 transition-colors"
-            aria-current={location.pathname === "/" ? "page" : undefined}
-          >
-            The Margin
-          </Link>
-
-          <nav className="flex items-center gap-6 text-sm font-medium text-stone-500">
-            <Link
-              to="/"
-              className="hover:text-stone-900 transition-colors"
-              aria-current={location.pathname === "/" ? "page" : undefined}
-            >
-              Archive
-            </Link>
-            <Link
-              to="/about"
-              className="hover:text-stone-900 transition-colors"
-              aria-current={location.pathname === "/about" ? "page" : undefined}
-            >
-              About
-            </Link>
-
-            {isAuthenticated && user ? (
-              <div className="flex items-center gap-3">
-                <Link
-                  to="/admin/posts"
-                  className="hidden sm:inline text-xs tracking-widest uppercase text-stone-500 hover:text-stone-900 transition-colors"
-                  aria-current={
-                    location.pathname.startsWith("/admin/posts")
-                      ? "page"
-                      : undefined
-                  }
-                >
-                  Manage posts
-                </Link>
-                <span className="hidden sm:inline text-xs text-stone-500">
-                  {user.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={logout}
-                  className="bg-stone-900 text-white rounded-none text-xs tracking-widest uppercase font-semibold px-4 py-2 hover:bg-amber-700 transition-colors"
-                >
-                  Logout
-                </button>
-              </div>
-            ) : (
-              <Link
-                to="/login"
-                className="bg-stone-900 text-white rounded-none text-xs tracking-widest uppercase font-semibold px-4 py-2 hover:bg-amber-700 transition-colors"
-                aria-current={
-                  location.pathname === "/login" ? "page" : undefined
-                }
-              >
-                Login
-              </Link>
-            )}
-          </nav>
-        </div>
-      </header>
+      <AppHeader />
 
       <main>{children}</main>
 
@@ -116,10 +50,21 @@ export default function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/post/:slug" element={<ArticlePage />} />
 
-            <Route element={<AdminRoute />}>
+            <Route element={<ContentRoute />}>
               <Route path="/admin/posts" element={<ManagePostsPage />} />
               <Route path="/admin/posts/new" element={<CreatePostPage />} />
               <Route path="/admin/posts/:id/edit" element={<EditPostPage />} />
+            </Route>
+
+            <Route element={<AdminRoute />}>
+              <Route path="/admin/tags" element={<ManageTagsPage />} />
+              <Route path="/admin/tags/new" element={<CreateTagPage />} />
+              <Route path="/admin/authors" element={<ManageAuthorsPage />} />
+              <Route path="/admin/authors/new" element={<CreateAuthorPage />} />
+              <Route
+                path="/admin/authors/:id/edit"
+                element={<EditAuthorPage />}
+              />
             </Route>
 
             <Route path="/:slug" element={<Navigate to="/" replace />} />
@@ -144,6 +89,7 @@ export default function App() {
             />
           </Routes>
         </Layout>
+        <Toaster richColors position="top-right" />
       </BrowserRouter>
     </AuthProvider>
   );

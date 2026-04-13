@@ -8,11 +8,12 @@
 > - `POST /api/posts`
 > - `PATCH /api/posts/:id`
 > - `DELETE /api/posts/:id`
+> - role-based post listing behavior in the admin area
 >
-> All these routes require:
+> These routes require authentication and are role-sensitive:
 >
-> - valid JWT
-> - `admin` role
+> - `admin` can manage any post
+> - `author` can create posts and manage only their own posts
 >
 > Do not start authors CRUD, tags CRUD, or role management in this phase.
 
@@ -20,15 +21,16 @@
 
 ## Goal
 
-Enable authenticated admins to manage posts from the frontend using the JWT
-session already implemented in the login phase.
+Enable authenticated users with content permissions to manage posts from the
+frontend using the JWT session already implemented in the login phase.
 
-This phase should add the minimum admin flow necessary to:
+This phase should add the minimum protected flow necessary to:
 
 - create a post
 - edit a post
 - delete a post
-- protect admin-only screens in the frontend
+- protect post management screens in the frontend
+- adapt the post listing UI to the current user's role
 
 ---
 
@@ -39,7 +41,7 @@ This phase should add the minimum admin flow necessary to:
 
 #### Auth requirements
 - `Authorization: Bearer <token>`
-- role: `admin`
+- role: `admin` or `author`
 
 #### Request body
 ```json
@@ -69,7 +71,8 @@ This phase should add the minimum admin flow necessary to:
 
 #### Auth requirements
 - `Authorization: Bearer <token>`
-- role: `admin`
+- role: `admin` or `author`
+- `author` may update only their own posts
 
 #### Request body
 Any subset of the create payload.
@@ -85,7 +88,8 @@ Any subset of the create payload.
 
 #### Auth requirements
 - `Authorization: Bearer <token>`
-- role: `admin`
+- role: `admin` or `author`
+- `author` may delete only their own posts
 
 #### Success response
 - `204 No Content`
@@ -95,14 +99,15 @@ Any subset of the create payload.
 ## Frontend Scope
 
 ### Included in this phase
-- add protected admin routes
+- add protected post routes
 - create post form page
 - edit post form page
 - create posts management page
 - add create/update/delete methods to the posts service
 - reuse stored JWT automatically through the shared axios client
-- restrict admin pages to authenticated users
-- restrict admin pages to users with `admin` role
+- restrict protected post pages to authenticated users
+- support role-based access for `admin` and `author`
+- support ownership-aware listing behavior for `author`
 - support delete action from the management screen
 
 ### Explicitly excluded from this phase
@@ -152,10 +157,12 @@ This keeps the public reading experience isolated from admin tooling.
 
 ### 4. Role checks must happen in the frontend too
 The backend remains the source of truth, but the frontend should also prevent
-non-admin users from accessing admin screens.
+unauthorized users from accessing protected post screens.
 
 Recommended rule:
-- authenticated but non-admin users should be redirected away from admin routes
+- authenticated `admin` users can access all protected post screens
+- authenticated `author` users can access protected post screens for content work
+- users without `admin` or `author` should be redirected away
 
 ---
 
@@ -224,6 +231,9 @@ Should:
 - show empty state
 - show delete confirmation
 - show API error state
+- adapt visible content based on the current user's role
+- show all posts for `admin`
+- show only owned posts for `author`
 
 ### CreatePostPage
 Should:
@@ -292,15 +302,23 @@ Important:
 ## Auth and Authorization Rules
 
 ### Authentication
-All admin pages must require a logged-in user.
+All protected post pages must require a logged-in user.
 
 ### Authorization
-All admin pages must require the `admin` role.
+Protected post pages must allow:
+- `admin`
+- `author`
+
+### Ownership rule
+For post listing and actions:
+- `admin` can see and manage all posts
+- `author` can see and manage only posts where `post.authorId === currentUser.id`
 
 ### Recommended frontend behavior
 - unauthenticated user → redirect to `/login`
-- authenticated non-admin user → redirect to `/` or show access denied
-- authenticated admin user → allow access
+- authenticated user without `admin` or `author` → redirect to `/` or show access denied
+- authenticated `admin` user → allow full access
+- authenticated `author` user → allow access with ownership restrictions
 
 ### Important
 Even if the frontend blocks access, the backend still enforces the real rule.
@@ -333,7 +351,7 @@ Do not expose raw backend/internal errors directly in the UI.
 
 ## Navigation Rules
 
-Recommended admin routes:
+Recommended protected post routes:
 
 - `/admin/posts`
 - `/admin/posts/new`
@@ -343,6 +361,9 @@ Behavior:
 - after create → redirect to `/admin/posts`
 - after update → redirect to `/admin/posts`
 - after delete → stay on `/admin/posts` and refresh list
+- listing behavior on `/admin/posts` depends on role:
+  - `admin` sees all posts
+  - `author` sees only owned posts
 
 ---
 
@@ -384,84 +405,84 @@ A straightforward implementation is preferred.
 ## Completion Checklist
 
 ### Service layer
-- [ ] create post method added
-- [ ] update post method added
-- [ ] delete post method added
-- [ ] protected API error mapping added
+- [x] create post method added
+- [x] update post method added
+- [x] delete post method added
+- [x] protected API error mapping added
 
 ### Route protection
-- [ ] admin route guard created
-- [ ] admin routes added to router
-- [ ] non-admin access blocked in frontend
+- [x] protected post route guard created (`ContentRoute` — allows `admin` + `author`)
+- [x] protected post routes added to router
+- [x] users without `admin` or `author` blocked in frontend
+- [x] role-based access for `admin` and `author` implemented
 
 ### Management page
-- [ ] posts management page created
-- [ ] posts list rendered
-- [ ] create button added
-- [ ] edit action added
-- [ ] delete action added
-- [ ] delete confirmation added
-- [ ] loading state added
-- [ ] empty state added
-- [ ] error state added
+- [x] posts management page created
+- [x] posts list rendered
+- [x] create button added
+- [x] edit action added
+- [x] delete action added
+- [x] delete confirmation added
+- [x] loading state added
+- [x] empty state added
+- [x] error state added
+- [x] `admin` sees all posts (no `published` filter — drafts included)
+- [x] `author` sees only owned posts
+- [x] ownership-aware actions rendered correctly
 
 ### Create page
-- [ ] create page created
-- [ ] form rendered
-- [ ] validation added
-- [ ] submit to API implemented
-- [ ] success redirect implemented
-- [ ] error state added
+- [x] create page created
+- [x] form rendered
+- [x] validation added
+- [x] submit to API implemented
+- [x] success redirect implemented
+- [x] error state added
 
 ### Edit page
-- [ ] edit page created
-- [ ] existing post loaded
-- [ ] form prefilled
-- [ ] update request implemented
-- [ ] success redirect implemented
-- [ ] error state added
+- [x] edit page created
+- [x] existing post loaded
+- [x] form prefilled
+- [x] update request implemented (`authorId` locked for `author` role)
+- [x] success redirect implemented
+- [x] error state added
 
 ### Cleanup
-- [ ] login flow still works
-- [ ] public posts pages still work
-- [ ] no authors CRUD started
-- [ ] no tags CRUD started
+- [x] login flow still works
+- [x] public posts pages still work
+- [x] authors CRUD completed (subsequent phase)
+- [x] tags CRUD completed (subsequent phase)
 
 ---
 
 ## Non-Goals for This Phase
 
-Do **not** implement now:
-- authors CRUD
-- tags CRUD
-- role management
+Items that were out of scope and remain pending:
+- role management UI
 - media upload
 - markdown editor
 - autosave
-- drafts workflow beyond `published`
 - audit log UI
 - bulk delete
-- pagination for admin list unless necessary
+- cross-author moderation UI for non-admin users
+- pagination for admin list
+
+Items completed in subsequent phases:
+- ~~authors CRUD~~ → done (`/admin/authors`)
+- ~~tags CRUD~~ → done (`/admin/tags`)
 
 ---
 
-## Recommended Next Step After This Phase
+## Phase Status
 
-Once protected posts CRUD is complete and validated, the next step should be one of:
+**✅ This phase is complete.**
 
-1. authors integration
-2. tags integration
-3. admin UX refinements:
-   - better selects
-   - tag picker
-   - richer validation
-   - improved error handling
+All protected posts CRUD functionality is implemented and working for both
+`admin` and `author` roles. Authors and tags CRUD have also been completed
+in subsequent phases.
 
----
+## Pending UX refinements (future phases)
 
-## Final Rule
-
-Until every unchecked item in this document is complete, this phase is still
-considered **protected posts CRUD only**.
-
-Do not start authors or tags modules before finishing this scope.
+- better author/tag selects (replace plain inputs)
+- richer inline validation feedback
+- pagination for the admin post list
+- bulk delete actions

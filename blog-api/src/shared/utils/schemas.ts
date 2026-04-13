@@ -30,14 +30,29 @@ export const createPostSchema = z.object({
 
 export const updatePostSchema = createPostSchema.partial();
 
+const publishedQueryParamSchema = z
+  .string()
+  .transform((v) => v === "true")
+  .optional();
+
 export const listPostsQuerySchema = z.object({
   category: z.enum(["Essay", "Practice", "Work", "Tools"]).optional(),
   tag: z.string().optional(),
   search: z.string().optional(),
-  published: z
+  published: publishedQueryParamSchema,
+  page: z.string().transform(Number).pipe(z.number().int().min(1)).optional(),
+  limit: z
     .string()
-    .transform((v) => v === "true")
+    .transform(Number)
+    .pipe(z.number().int().min(1).max(100))
     .optional(),
+});
+
+export const listManagedPostsQuerySchema = z.object({
+  category: z.enum(["Essay", "Practice", "Work", "Tools"]).optional(),
+  tag: z.string().optional(),
+  search: z.string().optional(),
+  published: publishedQueryParamSchema,
   page: z.string().transform(Number).pipe(z.number().int().min(1)).optional(),
   limit: z
     .string()
@@ -75,6 +90,7 @@ export const createTagSchema = z.object({
 export type CreatePostInput = z.infer<typeof createPostSchema>;
 export type UpdatePostInput = z.infer<typeof updatePostSchema>;
 export type ListPostsQuery = z.infer<typeof listPostsQuerySchema>;
+export type ListManagedPostsQuery = z.infer<typeof listManagedPostsQuerySchema>;
 export type CreateAuthorInput = z.infer<typeof createAuthorSchema>;
 export type UpdateAuthorInput = z.infer<typeof updateAuthorSchema>;
 export type CreateTagInput = z.infer<typeof createTagSchema>;

@@ -1,5 +1,9 @@
 import { createContext } from "react";
-import type { AuthenticatedUser, LoginRequest, LoginResponse } from "@/types/auth";
+import type {
+  AuthenticatedUser,
+  LoginRequest,
+  LoginResponse,
+} from "@/types/auth";
 
 export interface AuthContextValue {
   user: AuthenticatedUser | null;
@@ -8,6 +12,7 @@ export interface AuthContextValue {
   isLoading: boolean;
   login: (credentials: LoginRequest) => Promise<LoginResponse>;
   logout: () => void;
+  refreshSession: () => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);
