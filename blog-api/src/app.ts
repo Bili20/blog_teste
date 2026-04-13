@@ -1,6 +1,7 @@
 import "express-async-errors";
 import express, { Application, Request, Response } from "express";
 import cors from "cors";
+import path from "node:path";
 import { parse as parseCookie } from "cookie";
 
 // Infrastructure
@@ -21,12 +22,14 @@ import { PostController } from "@/presentation/controllers/PostController";
 import { AuthorController } from "@/presentation/controllers/AuthorController";
 import { TagController } from "@/presentation/controllers/TagController";
 import { AuthController } from "@/presentation/controllers/AuthController";
+import { UploadController } from "@/presentation/controllers/UploadController";
 
 // Routes
 import { postRoutes } from "@/presentation/routes/post.routes";
 import { authorRoutes } from "@/presentation/routes/author.routes";
 import { tagRoutes } from "@/presentation/routes/tag.routes";
 import { authRoutes } from "@/presentation/routes/auth.routes";
+import { uploadRoutes } from "@/presentation/routes/upload.routes";
 
 // Middlewares
 import { errorHandler } from "@/presentation/middlewares/errorHandler";
@@ -52,6 +55,9 @@ export function createApp(): Application {
   });
   app.use(requestLogger);
 
+  // ── Static file serving ─────────────────────────────────────────────────────
+  app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
   // ── Dependency injection (manual, no container needed at this scale) ────────
   const postRepository = new PrismaPostRepository(prisma);
   const authorRepository = new PrismaAuthorRepository(prisma);
@@ -67,12 +73,14 @@ export function createApp(): Application {
   const authorController = new AuthorController(authorService);
   const tagController = new TagController(tagService);
   const authController = new AuthController(authService);
+  const uploadController = new UploadController();
 
   // ── Routes ──────────────────────────────────────────────────────────────────
   app.use("/api/auth", authRoutes(authController));
   app.use("/api/posts", postRoutes(postController, postService));
   app.use("/api/authors", authorRoutes(authorController));
   app.use("/api/tags", tagRoutes(tagController));
+  app.use("/api/uploads", uploadRoutes(uploadController));
 
   // ── Health check ────────────────────────────────────────────────────────────
   app.get("/health", (_req: Request, res: Response) => {

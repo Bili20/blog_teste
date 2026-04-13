@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TipTapEditor } from "@/components/TipTapEditor";
+import "@/styles/tiptap.css";
 import {
   Select,
   SelectContent,
@@ -131,12 +133,17 @@ export function PostForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="body">Body</Label>
-            <Textarea
-              id="body"
-              {...register("body")}
-              disabled={isSubmitting}
-              className="rounded-none min-h-[320px]"
+            <Label>Body</Label>
+            <Controller
+              name="body"
+              control={control}
+              render={({ field }) => (
+                <TipTapEditor
+                  content={field.value}
+                  onChange={field.onChange}
+                  disabled={isSubmitting}
+                />
+              )}
             />
             {errors.body && (
               <p className="text-sm text-red-700">{errors.body.message}</p>

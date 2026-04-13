@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
+import DOMPurify from "dompurify";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { getPostBySlug } from "@/services/postService";
 import type { Post } from "@/types/post";
+import "@/styles/tiptap.css";
 
 function getErrorMessage(error: unknown): string {
   if (
@@ -72,12 +74,32 @@ export default function ArticlePage() {
     };
   }, [slug]);
 
-  const paragraphs = useMemo(() => {
-    if (!post) {
-      return [];
-    }
-
-    return post.body.split("\n\n");
+  const sanitizedBody = useMemo(() => {
+    if (!post) return "";
+    return DOMPurify.sanitize(post.body, {
+      ALLOWED_TAGS: [
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "p",
+        "br",
+        "strong",
+        "em",
+        "u",
+        "s",
+        "ul",
+        "ol",
+        "li",
+        "blockquote",
+        "hr",
+        "a",
+        "img",
+      ],
+      ALLOWED_ATTR: ["href", "target", "rel", "src", "alt", "width", "height"],
+    });
   }, [post]);
 
   if (isLoading) {
@@ -157,44 +179,10 @@ export default function ArticlePage() {
 
       <Separator className="mb-10 bg-stone-200" />
 
-      <div className="prose-stone max-w-none">
-        {paragraphs.map((paragraph, index) => {
-          if (paragraph.startsWith("**") && paragraph.endsWith("**")) {
-            return (
-              <h3
-                key={index}
-                className="font-serif text-xl font-bold text-stone-900 mt-10 mb-4"
-              >
-                {paragraph.replace(/\*\*/g, "")}
-              </h3>
-            );
-          }
-
-          if (paragraph.includes("*") && !paragraph.startsWith("**")) {
-            const parts = paragraph.split(/\*(.*?)\*/g);
-
-            return (
-              <p
-                key={index}
-                className="text-stone-700 leading-relaxed mb-5 text-base sm:text-lg font-serif"
-              >
-                {parts.map((part, partIndex) =>
-                  partIndex % 2 === 1 ? <em key={partIndex}>{part}</em> : part,
-                )}
-              </p>
-            );
-          }
-
-          return (
-            <p
-              key={index}
-              className="text-stone-700 leading-relaxed mb-5 text-base sm:text-lg font-serif"
-            >
-              {paragraph}
-            </p>
-          );
-        })}
-      </div>
+      <div
+        className="tiptap prose-stone max-w-none"
+        dangerouslySetInnerHTML={{ __html: sanitizedBody }}
+      />
 
       <Separator className="my-10 bg-stone-200" />
 
