@@ -284,6 +284,8 @@ export default function EditPostPage() {
     setApiErrorMessage(null);
     setSuccessMessage(null);
 
+    const normalizedAuthorId = data.authorId.trim();
+
     const payload: UpdatePostRequest = {
       title: data.title.trim(),
       subtitle: data.subtitle.trim(),
@@ -294,9 +296,9 @@ export default function EditPostPage() {
       slug: data.slug.trim() || undefined,
       featured: data.featured,
       published: data.published,
-      // For author role the backend will override authorId with req.user.sub anyway,
-      // but we still send it for completeness.
-      authorId: data.authorId.trim(),
+      ...(isAdmin && normalizedAuthorId
+        ? { authorId: normalizedAuthorId }
+        : {}),
       tagSlugs: data.selectedTagSlugs,
     };
 
@@ -323,11 +325,11 @@ export default function EditPostPage() {
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-10">
-        <div>
+        <div className="min-w-0 flex-1">
           <p className="text-xs tracking-widest uppercase text-amber-700 font-semibold mb-3">
             {isAdmin ? "Admin" : "Author"}
           </p>
-          <h1 className="font-serif text-4xl font-bold text-stone-900">
+          <h1 className="font-serif text-4xl font-bold text-stone-900 break-all line-clamp-3">
             {pageTitle}
           </h1>
           <p className="text-stone-500 mt-2">Editing as {user.name}.</p>
@@ -335,7 +337,7 @@ export default function EditPostPage() {
 
         <Link
           to="/admin/posts"
-          className="inline-flex items-center justify-center px-4 py-2 border border-stone-200 text-stone-700 rounded-none text-xs tracking-widest uppercase font-semibold hover:bg-stone-50 transition-colors"
+          className="shrink-0 inline-flex items-center justify-center px-4 py-2 border border-stone-200 text-stone-700 rounded-none text-xs tracking-widest uppercase font-semibold hover:bg-stone-50 transition-colors"
         >
           Back to posts
         </Link>

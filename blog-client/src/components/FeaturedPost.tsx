@@ -21,7 +21,7 @@ export const FeaturedPost: React.FC<{
               {post.category}
             </span>
           </div>
-          <h2 className="font-serif text-4xl font-bold text-white leading-tight mb-4">
+          <h2 className="font-serif text-4xl font-bold text-white leading-tight mb-4 line-clamp-3 break-words">
             {post.title}
           </h2>
           <p className="text-stone-400 text-lg leading-relaxed font-serif italic">

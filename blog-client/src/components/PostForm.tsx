@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TipTapEditor } from "@/components/TipTapEditor";
+import "@/styles/tiptap.css";
 import {
   Select,
   SelectContent,
@@ -82,7 +84,7 @@ export function PostForm({
             <p className="text-xs tracking-widest uppercase text-amber-700 font-semibold mb-3">
               Admin
             </p>
-            <h1 className="font-serif text-4xl font-bold text-stone-900">
+            <h1 className="font-serif text-4xl font-bold text-stone-900 break-all line-clamp-3">
               {title}
             </h1>
             {description && (
@@ -97,6 +99,7 @@ export function PostForm({
               {...register("title")}
               disabled={isSubmitting}
               className="rounded-none"
+              maxLength={150}
             />
             {errors.title && (
               <p className="text-sm text-red-700">{errors.title.message}</p>
@@ -130,12 +133,17 @@ export function PostForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="body">Body</Label>
-            <Textarea
-              id="body"
-              {...register("body")}
-              disabled={isSubmitting}
-              className="rounded-none min-h-[320px]"
+            <Label>Body</Label>
+            <Controller
+              name="body"
+              control={control}
+              render={({ field }) => (
+                <TipTapEditor
+                  content={field.value}
+                  onChange={field.onChange}
+                  disabled={isSubmitting}
+                />
+              )}
             />
             {errors.body && (
               <p className="text-sm text-red-700">{errors.body.message}</p>

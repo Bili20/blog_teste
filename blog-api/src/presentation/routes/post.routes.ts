@@ -12,28 +12,12 @@ export function postRoutes(
 ): Router {
   const router = Router();
 
-  // ── Public routes ───────────────────────────────────────────────────────────
-
-  // GET /posts?category=Essay&tag=culture&search=internet&page=1&limit=10
   router.get("/", controller.listPosts);
 
-  // GET /posts/featured
   router.get("/featured", controller.getFeaturedPost);
 
-  // GET /posts/slug/:slug
   router.get("/slug/:slug", controller.getPostBySlug);
 
-  // ── Protected routes ─────────────────────────────────────────────────────────
-  //
-  // Both ROLE_ADMIN and ROLE_AUTHOR are allowed to manage posts.
-  //
-  // Admin:  can list, create, edit and delete any post.
-  // Author: can list, create, edit and delete only their own posts.
-  //
-  // Ownership for update/delete is enforced by requirePostOwnership.
-  // Ownership for protected listing is enforced in the backend service layer.
-
-  // GET /posts/manage
   router.get(
     "/manage",
     authenticate,
@@ -41,10 +25,8 @@ export function postRoutes(
     controller.listManagedPosts,
   );
 
-  // GET /posts/:id
   router.get("/:id", controller.getPostById);
 
-  // POST /posts
   router.post(
     "/",
     authenticate,
@@ -52,7 +34,6 @@ export function postRoutes(
     controller.createPost,
   );
 
-  // PATCH /posts/:id
   router.patch(
     "/:id",
     authenticate,
@@ -61,7 +42,6 @@ export function postRoutes(
     controller.updatePost,
   );
 
-  // DELETE /posts/:id
   router.delete(
     "/:id",
     authenticate,

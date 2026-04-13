@@ -476,7 +476,7 @@ export default function ManagePostsPage() {
                         </Badge>
                       </div>
 
-                      <h2 className="font-serif text-2xl font-bold text-stone-900 mb-2">
+                      <h2 className="font-serif text-2xl font-bold text-stone-900 mb-2 line-clamp-2 break-words">
                         {post.title}
                       </h2>
 
