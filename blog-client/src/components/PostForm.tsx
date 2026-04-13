@@ -82,7 +82,7 @@ export function PostForm({
             <p className="text-xs tracking-widest uppercase text-amber-700 font-semibold mb-3">
               Admin
             </p>
-            <h1 className="font-serif text-4xl font-bold text-stone-900">
+            <h1 className="font-serif text-4xl font-bold text-stone-900 break-all line-clamp-3">
               {title}
             </h1>
             {description && (
@@ -97,6 +97,7 @@ export function PostForm({
               {...register("title")}
               disabled={isSubmitting}
               className="rounded-none"
+              maxLength={150}
             />
             {errors.title && (
               <p className="text-sm text-red-700">{errors.title.message}</p>

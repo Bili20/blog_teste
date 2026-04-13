@@ -21,7 +21,7 @@ export const PostCard: React.FC<{
         <span className="text-stone-300">·</span>
         <span className="text-xs text-stone-400">{post.readTime} read</span>
       </div>
-      <h3 className="font-serif text-2xl font-bold text-stone-900 group-hover:text-amber-700 transition-colors mb-2 leading-tight">
+      <h3 className="font-serif text-2xl font-bold text-stone-900 group-hover:text-amber-700 transition-colors mb-2 leading-tight line-clamp-3 break-words">
         {post.title}
       </h3>
       <p className="text-stone-500 text-sm font-serif italic mb-3">

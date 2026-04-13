@@ -169,7 +169,7 @@ export default function HomePage() {
   return (
     <>
       <div className="border-b border-stone-200 bg-stone-50">
-        <div className="max-w-5xl mx-auto px-6 py-3 flex items-center gap-4 text-xs text-stone-400 overflow-x-auto">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-4 text-xs text-stone-400 overflow-x-auto">
           <span className="text-amber-700 font-semibold tracking-widest uppercase whitespace-nowrap">
             Long reads
           </span>
@@ -185,7 +185,8 @@ export default function HomePage() {
               <button
                 key={post.id}
                 onClick={() => void handleRead(post.slug)}
-                className="hover:text-stone-700 transition-colors whitespace-nowrap px-4 py-2"
+                className="hover:text-stone-700 transition-colors whitespace-nowrap px-4 py-2 truncate max-w-[200px] sm:max-w-xs"
+                title={post.title}
               >
                 {post.title}
               </button>
@@ -194,7 +195,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-6 py-12">
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         {featuredPostErrorMessage && (
           <div className="border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 mb-8">
             {featuredPostErrorMessage}
@@ -205,13 +206,13 @@ export default function HomePage() {
           <FeaturedPost post={featuredPost} onRead={handleRead} />
         )}
 
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-8">
-          <div className="flex gap-0 border border-stone-200 flex-wrap">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-8">
+          <div className="flex gap-0 border border-stone-200 flex-wrap w-full md:w-auto">
             {CATEGORY_OPTIONS.map((category) => (
               <button
                 key={category}
                 onClick={() => setActiveCategory(category)}
-                className={`px-4 py-2 text-xs tracking-widest uppercase font-semibold transition-colors border-r border-stone-200 last:border-0 ${
+                className={`flex-1 md:flex-none px-3 sm:px-4 py-2 text-[10px] sm:text-xs tracking-widest uppercase font-semibold transition-colors border-r border-stone-200 last:border-0 ${
                   activeCategory === category
                     ? "bg-stone-900 text-white"
                     : "text-stone-400 hover:text-stone-700 hover:bg-stone-50"
@@ -227,7 +228,7 @@ export default function HomePage() {
             placeholder="Search..."
             value={searchQuery}
             onChange={(event) => setSearchQuery(event.target.value)}
-            className="px-4 py-2 text-sm border border-stone-200 focus:outline-none focus:border-stone-400 bg-white w-full sm:w-48"
+            className="px-4 py-2 text-sm border border-stone-200 focus:outline-none focus:border-stone-400 bg-white w-full md:w-48"
           />
         </div>
 

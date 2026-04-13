@@ -13,7 +13,7 @@ export default function AboutPage() {
         ← Back
       </Link>
 
-      <h1 className="font-serif text-5xl font-bold text-stone-900 mb-6">
+      <h1 className="font-serif text-4xl sm:text-5xl font-bold text-stone-900 mb-6">
         About The Margin
       </h1>
 
@@ -44,9 +44,9 @@ export default function AboutPage() {
         </p>
       </div>
 
-      <div className="mt-12 p-8 bg-stone-900 border border-stone-200">
-        <div className="flex items-start gap-4">
-          <Avatar className="w-12 h-12">
+      <div className="mt-12 p-6 sm:p-8 bg-stone-900 border border-stone-200">
+        <div className="flex flex-col sm:flex-row items-start gap-4 sm:gap-6">
+          <Avatar className="w-12 h-12 hidden sm:flex">
             <AvatarFallback className="bg-stone-200 text-stone-700 text-sm">
               TM
             </AvatarFallback>
@@ -59,14 +59,14 @@ export default function AboutPage() {
               New essays delivered to your inbox, no more than twice a month.
             </p>
 
-            <div className="flex gap-0 max-w-md">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-0 max-w-md w-full">
               <input
                 aria-label="Email address"
                 type="email"
                 placeholder="your@email.com"
-                className="flex-1 px-4 py-2 text-sm bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:outline-none focus:border-amber-500"
+                className="flex-1 w-full px-4 py-2 text-sm bg-stone-800 border border-stone-700 text-white placeholder:text-stone-500 focus:outline-none focus:border-amber-500"
               />
-              <Button className="bg-amber-700 hover:bg-amber-600 rounded-none px-6 text-white text-xs tracking-widest uppercase font-semibold">
+              <Button className="bg-amber-700 hover:bg-amber-600 rounded-none px-6 py-2 sm:py-0 h-auto sm:h-10 text-white text-xs tracking-widest uppercase font-semibold w-full sm:w-auto">
                 Subscribe
               </Button>
             </div>

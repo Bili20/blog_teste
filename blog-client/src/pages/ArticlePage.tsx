@@ -82,7 +82,7 @@ export default function ArticlePage() {
 
   if (isLoading) {
     return (
-      <div className="max-w-3xl mx-auto px-6 py-24 text-center">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
         <p className="text-xs tracking-widest uppercase text-amber-700 font-semibold mb-4">
           Loading article
         </p>
@@ -98,7 +98,7 @@ export default function ArticlePage() {
 
   if (!post) {
     return (
-      <div className="max-w-3xl mx-auto px-6 py-24 text-center">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 py-16 sm:py-24 text-center">
         <h1 className="font-serif text-3xl font-bold text-stone-900 mb-4">
           Article not found
         </h1>
@@ -116,15 +116,15 @@ export default function ArticlePage() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-12">
+    <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
       <Link
         to="/"
-        className="text-sm text-stone-400 hover:text-stone-700 transition-colors mb-10 inline-flex items-center gap-2"
+        className="text-sm text-stone-400 hover:text-stone-700 transition-colors mb-8 sm:mb-10 inline-flex items-center gap-2"
       >
         ← Back to archive
       </Link>
 
-      <div className="flex items-center gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-6">
         <span className="text-xs tracking-widest uppercase text-amber-700 font-semibold">
           {post.category}
         </span>
@@ -134,14 +134,14 @@ export default function ArticlePage() {
         <span className="text-xs text-stone-400">{post.readTime} read</span>
       </div>
 
-      <h1 className="font-serif text-5xl font-bold text-stone-900 leading-tight mb-4">
+      <h1 className="font-serif text-4xl sm:text-5xl font-bold text-stone-900 leading-tight mb-4 break-words">
         {post.title}
       </h1>
-      <p className="font-serif text-xl text-stone-500 italic mb-8">
+      <p className="font-serif text-lg sm:text-xl text-stone-500 italic mb-8">
         {post.subtitle}
       </p>
 
-      <div className="flex items-center gap-3 mb-10">
+      <div className="flex items-center gap-3 mb-8 sm:mb-10">
         <Avatar className="w-9 h-9">
           <AvatarFallback className="bg-stone-200 text-stone-600 text-sm">
             {post.author.initials}
@@ -176,7 +176,7 @@ export default function ArticlePage() {
             return (
               <p
                 key={index}
-                className="text-stone-700 leading-relaxed mb-5 text-lg font-serif"
+                className="text-stone-700 leading-relaxed mb-5 text-base sm:text-lg font-serif"
               >
                 {parts.map((part, partIndex) =>
                   partIndex % 2 === 1 ? <em key={partIndex}>{part}</em> : part,
@@ -188,7 +188,7 @@ export default function ArticlePage() {
           return (
             <p
               key={index}
-              className="text-stone-700 leading-relaxed mb-5 text-lg font-serif"
+              className="text-stone-700 leading-relaxed mb-5 text-base sm:text-lg font-serif"
             >
               {paragraph}
             </p>

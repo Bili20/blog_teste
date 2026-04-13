@@ -78,7 +78,10 @@ export type CreateTagFormValues = z.infer<typeof createTagSchema>;
 // ─── Posts ────────────────────────────────────────────────────────────────────
 
 export const postSchema = z.object({
-  title: z.string().min(3, "Title must be at least 3 characters."),
+  title: z
+    .string()
+    .min(3, "Title must be at least 3 characters.")
+    .max(150, "Title must be at most 150 characters."),
   subtitle: z.string().min(3, "Subtitle must be at least 3 characters."),
   excerpt: z.string().min(10, "Excerpt must be at least 10 characters."),
   body: z.string().min(20, "Body must be at least 20 characters."),

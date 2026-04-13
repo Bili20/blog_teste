@@ -29,8 +29,10 @@ export function DeleteConfirmDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md rounded-none">
         <DialogHeader>
-          <DialogTitle className="font-serif text-xl">{title}</DialogTitle>
-          <DialogDescription className="text-stone-500">
+          <DialogTitle className="font-serif text-xl break-words line-clamp-3">
+            {title}
+          </DialogTitle>
+          <DialogDescription className="text-stone-500 break-words">
             {description}
           </DialogDescription>
         </DialogHeader>
