@@ -97,8 +97,7 @@ Author ────< RefreshToken
 
 ### `POST /api/auth/login`
 
-Validates credentials, returns a new access token, and sets a refresh token
-cookie.
+Validates credentials, sets the auth cookies, and returns an empty success body.
 
 **Request body:**
 ```json
@@ -110,9 +109,13 @@ cookie.
 
 **Response `200`:**
 ```json
-{
-  "accessToken": "<jwt>"
-}
+{}
+```
+
+**Set-Cookie:**
+```text
+accessToken=<jwt>; HttpOnly; SameSite=Strict; Path=/
+refreshToken=<opaque-refresh-token>; HttpOnly; SameSite=Strict; Path=/api/auth
 ```
 
 **Set-Cookie:**
@@ -142,22 +145,14 @@ a new refresh token cookie.
 Cookie: refreshToken=<opaque-refresh-token>
 ```
 
-**Optional fallback request body:**
-```json
-{
-  "refreshToken": "<opaque-refresh-token>"
-}
-```
-
 **Response `200`:**
 ```json
-{
-  "accessToken": "<jwt>"
-}
+{}
 ```
 
 **Set-Cookie:**
 ```text
+accessToken=<jwt>; HttpOnly; SameSite=Strict; Path=/api
 refreshToken=<new-opaque-refresh-token>; HttpOnly; SameSite=Strict; Path=/api/auth; Max-Age=2592000
 ```
 
@@ -172,7 +167,7 @@ refreshToken=<new-opaque-refresh-token>; HttpOnly; SameSite=Strict; Path=/api/au
 
 Refresh tokens are **single-use**:
 
-1. client sends the current refresh token, preferably through the cookie
+1. browser sends the current refresh token through the cookie
 2. server hashes it and looks it up in `refresh_tokens`
 3. server rejects it if it is missing, revoked, or expired
 4. server revokes the current stored token
@@ -180,6 +175,7 @@ Refresh tokens are **single-use**:
 6. server issues a new refresh token
 7. server stores only the **hash** of the new refresh token
 8. server sets the new raw refresh token in a fresh HTTP-only cookie
+9. server also refreshes the access token cookie
 
 This is a **refresh token rotation** flow. The raw refresh token is never stored
 in plaintext in the database.
@@ -188,18 +184,11 @@ in plaintext in the database.
 
 ### `POST /api/auth/logout`
 
-Revokes the current refresh token and clears the refresh token cookie.
+Revokes the current refresh token and clears both auth cookies.
 
 **Preferred transport:**
 ```text
 Cookie: refreshToken=<opaque-refresh-token>
-```
-
-**Optional fallback request body:**
-```json
-{
-  "refreshToken": "<opaque-refresh-token>"
-}
 ```
 
 **Response `204`:**
@@ -207,14 +196,15 @@ Cookie: refreshToken=<opaque-refresh-token>
 
 **Set-Cookie:**
 ```text
+accessToken=; HttpOnly; SameSite=Strict; Path=/api; Max-Age=0
 refreshToken=; HttpOnly; SameSite=Strict; Path=/api/auth; Max-Age=0
 ```
 
 **Important behavior**
-- if a refresh token is present and valid, it is revoked
-- if the cookie exists, it is cleared
+- if a refresh token cookie is present and valid, it is revoked
+- both auth cookies are cleared
 - logout does not require an access token in this implementation
-- logout is idempotent from the client perspective because clearing the cookie is
+- logout is idempotent from the client perspective because cookie clearing is
   always attempted
 
 ---
@@ -320,7 +310,7 @@ HTTP request
 |---|---|---|
 | `POST` | `/api/auth/refresh` | — |
 | `POST` | `/api/auth/logout` | — |
-| `GET` | `/api/auth/me` | `authenticate` |
+| `GET` | `/api/auth/me` | `authenticate` (access token cookie) |
 
 ### Posts
 | Method | Path | Guard |
@@ -420,8 +410,7 @@ The following items still need hardening:
 3. **Cookie hardening may still need environment-specific tuning**
    - current cookie transport uses `httpOnly`, `sameSite`, and environment-aware `secure`
    - production deployments may still need explicit domain / proxy / HTTPS review
-   - the current implementation rotates tokens one-by-one
-   - it does not yet detect suspicious reuse patterns across a token family
+   - access token cookie scope and lifetime should be reviewed carefully before production rollout
 
 4. **Audit logging is not implemented**
    - login attempts and auth-sensitive actions are not yet recorded
@@ -513,27 +502,33 @@ Refresh tokens are stored in the database through a dedicated
 - an expired token should be treated as invalid and revoked when encountered
 - rotation should revoke the previous token before issuing the next one
 
-## Refresh Token Cookie Transport
+## Auth Cookie Transport
 
-The backend now transports refresh tokens primarily through an HTTP-only cookie.
+The backend now transports both access tokens and refresh tokens primarily
+through HTTP-only cookies.
 
 ### Cookie attributes
 
-| Attribute | Purpose |
-|---|---|
-| `HttpOnly` | Prevents JavaScript access in the browser |
-| `SameSite=Strict` | Reduces CSRF exposure for cross-site requests |
-| `Path=/api/auth` | Limits cookie scope to auth endpoints |
-| `Secure` | Enabled in production environments |
-| `Max-Age` | Matches refresh token lifetime |
+| Cookie | Attribute | Purpose |
+|---|---|---|
+| `accessToken` | `HttpOnly` | Prevents JavaScript access in the browser |
+| `accessToken` | `SameSite=Strict` | Reduces CSRF exposure for cross-site requests |
+| `accessToken` | `Path=/api` | Makes the access token available to protected API routes without exposing it to unrelated site paths |
+| `accessToken` | `Secure` | Enabled in production environments |
+| `refreshToken` | `HttpOnly` | Prevents JavaScript access in the browser |
+| `refreshToken` | `SameSite=Strict` | Reduces CSRF exposure for cross-site requests |
+| `refreshToken` | `Path=/api/auth` | Limits refresh token scope to auth endpoints |
+| `refreshToken` | `Secure` | Enabled in production environments |
+| `refreshToken` | `Max-Age` | Matches refresh token lifetime |
 
 ### Transport rules
 
-- `login` sets the refresh token cookie
-- `refresh` reads the cookie first and rotates it on success
-- `logout` clears the cookie even if the client session is already stale
-- request-body refresh token transport is kept only as a compatibility fallback
-- the preferred long-term client integration is cookie-based refresh handling
+- `login` sets both the access token cookie and the refresh token cookie
+- `refresh` reads the refresh token cookie and rotates both auth cookies on success
+- `logout` clears both auth cookies even if the client session is already stale
+- refresh token transport is cookie-based
+- access token transport is cookie-based
+- the frontend should not read or persist either token directly
 
 ---
 
@@ -548,7 +543,7 @@ The backend now transports refresh tokens primarily through an HTTP-only cookie.
 - **Token revocation**: For immediate invalidation of access tokens, add a token
   blocklist (Redis or a DB table) and check it inside `authenticate`.
 - **Rate limiting**: Apply a rate limiter specifically to `POST /api/auth/login`.
-- **Audit log**: Record login and refresh events (timestamp, IP, author ID) in a separate table.
+- **Audit log**: Record login, refresh, and logout events (timestamp, IP, author ID) in a separate table.
 - **Current-user DB lookup**: Keep `/auth/me` backed by the database, not only by JWT claims.
 - **Prisma workflow discipline**: After any schema change that affects auth models,
   run Prisma generation before expecting repository types such as `prisma.refreshToken`

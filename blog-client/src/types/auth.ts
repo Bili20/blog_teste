@@ -10,9 +10,9 @@ export interface LoginRequest {
   password: string;
 }
 
-export interface LoginResponse {
-  accessToken: string;
-}
+export type LoginResponse = void;
+
+export type RefreshSessionResponse = void;
 
 export interface CurrentUserResponse {
   id: string;
@@ -22,7 +22,6 @@ export interface CurrentUserResponse {
 }
 
 export interface AuthState {
-  accessToken: string | null;
   user: AuthenticatedUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;

@@ -1,5 +1,5 @@
 import { AxiosError } from "axios";
-import { api, AUTH_TOKEN_STORAGE_KEY } from "@/services/api";
+import { api } from "@/services/api";
 import type {
   AuthenticatedUser,
   LoginRequest,
@@ -10,9 +10,17 @@ const AUTH_USER_STORAGE_KEY = "blog.auth.user";
 
 export async function login(credentials: LoginRequest): Promise<LoginResponse> {
   try {
-    const response = await api.post<LoginResponse>("/auth/login", credentials);
-    persistAccessToken(response.data.accessToken);
-    return response.data;
+    await api.post("/auth/login", credentials);
+    return;
+  } catch (error) {
+    throw mapAuthError(error);
+  }
+}
+
+export async function refreshAccessToken(): Promise<LoginResponse> {
+  try {
+    await api.post("/auth/refresh", {});
+    return;
   } catch (error) {
     throw mapAuthError(error);
   }
@@ -28,21 +36,18 @@ export async function getCurrentUser(): Promise<AuthenticatedUser> {
   }
 }
 
-export function persistAccessToken(accessToken: string): void {
-  window.localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, accessToken);
+export async function logout(): Promise<void> {
+  try {
+    await api.post("/auth/logout", {});
+  } catch (error) {
+    throw mapAuthError(error);
+  } finally {
+    clearStoredUser();
+  }
 }
 
 export function persistUser(user: AuthenticatedUser): void {
   window.localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
-}
-
-export function logout(): void {
-  window.localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
-  window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
-}
-
-export function getStoredAccessToken(): string | null {
-  return window.localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 }
 
 export function getStoredUser(): AuthenticatedUser | null {
@@ -55,13 +60,13 @@ export function getStoredUser(): AuthenticatedUser | null {
   try {
     return JSON.parse(rawUser) as AuthenticatedUser;
   } catch {
-    window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+    clearStoredUser();
     return null;
   }
 }
 
-export function isAuthenticated(): boolean {
-  return Boolean(getStoredAccessToken() && getStoredUser());
+export function clearStoredUser(): void {
+  window.localStorage.removeItem(AUTH_USER_STORAGE_KEY);
 }
 
 export function hasRole(roleName: string): boolean {
@@ -98,5 +103,5 @@ function mapAuthError(error: unknown): Error {
     }
   }
 
-  return new Error("Não foi possível realizar o login.");
+  return new Error("Não foi possível realizar a autenticação.");
 }

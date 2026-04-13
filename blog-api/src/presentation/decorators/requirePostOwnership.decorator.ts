@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { IPostService } from "@/domain/interfaces/services/IPostService";
 import { ForbiddenError, UnauthorizedError } from "@/shared/errors/AppError";
+import { ROLE_ADMIN } from "@/shared/constants/roles.constants";
 
 /**
  * Ownership guard for post write operations.
@@ -33,7 +34,7 @@ export function requirePostOwnership(postService: IPostService) {
     }
 
     // Admin can manage any post — no ownership check needed.
-    if (req.user.roles.includes("admin")) {
+    if (req.user.roles.includes(ROLE_ADMIN)) {
       return next();
     }
 

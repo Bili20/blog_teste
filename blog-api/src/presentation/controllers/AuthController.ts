@@ -1,35 +1,60 @@
 import { Request, Response } from "express";
 import { serialize } from "cookie";
 import { IAuthService } from "@/domain/interfaces/services/IAuthService";
-import { loginSchema, refreshTokenSchema } from "@/shared/utils/schemas";
+import { loginSchema } from "@/shared/utils/schemas";
 import { UnauthorizedError } from "@/shared/errors/AppError";
+import {
+  ACCESS_TOKEN_COOKIE_NAME,
+  AUTH_COOKIE_PATHS,
+  AUTH_ENV_KEYS,
+  AUTH_ERROR_MESSAGES,
+  AUTH_TOKEN_DEFAULTS,
+  REFRESH_TOKEN_COOKIE_NAME,
+  isProductionEnvironment,
+} from "@/shared/constants/auth.constants";
 
-const REFRESH_TOKEN_COOKIE_NAME = "refreshToken";
+function getAccessTokenCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: isProductionEnvironment(),
+    sameSite: AUTH_TOKEN_DEFAULTS.COOKIE_SAME_SITE,
+    path: AUTH_COOKIE_PATHS.ACCESS_TOKEN,
+  };
+}
 
 function getRefreshTokenCookieOptions() {
-  const isProduction = process.env.NODE_ENV === "production";
   const refreshTokenExpiresInDays = Number(
-    process.env.REFRESH_TOKEN_EXPIRES_IN_DAYS ?? "30",
+    process.env[AUTH_ENV_KEYS.REFRESH_TOKEN_EXPIRES_IN_DAYS] ??
+      String(AUTH_TOKEN_DEFAULTS.REFRESH_TOKEN_EXPIRES_IN_DAYS),
   );
 
   const safeExpiresInDays =
     Number.isFinite(refreshTokenExpiresInDays) && refreshTokenExpiresInDays > 0
       ? refreshTokenExpiresInDays
-      : 30;
+      : AUTH_TOKEN_DEFAULTS.REFRESH_TOKEN_EXPIRES_IN_DAYS;
 
   const maxAge = safeExpiresInDays * 24 * 60 * 60;
 
   return {
     httpOnly: true,
-    secure: isProduction,
-    sameSite: "strict" as const,
-    path: "/api/auth",
+    secure: isProductionEnvironment(),
+    sameSite: AUTH_TOKEN_DEFAULTS.COOKIE_SAME_SITE,
+    path: AUTH_COOKIE_PATHS.REFRESH_TOKEN,
     maxAge,
   };
 }
 
+function setAccessTokenCookie(res: Response, accessToken: string): void {
+  res.append(
+    "Set-Cookie",
+    serialize(ACCESS_TOKEN_COOKIE_NAME, accessToken, {
+      ...getAccessTokenCookieOptions(),
+    }),
+  );
+}
+
 function setRefreshTokenCookie(res: Response, refreshToken: string): void {
-  res.setHeader(
+  res.append(
     "Set-Cookie",
     serialize(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
       ...getRefreshTokenCookieOptions(),
@@ -37,41 +62,37 @@ function setRefreshTokenCookie(res: Response, refreshToken: string): void {
   );
 }
 
+function clearAccessTokenCookie(res: Response): void {
+  res.append(
+    "Set-Cookie",
+    serialize(ACCESS_TOKEN_COOKIE_NAME, "", {
+      httpOnly: true,
+      secure: isProductionEnvironment(),
+      sameSite: AUTH_TOKEN_DEFAULTS.COOKIE_SAME_SITE,
+      path: AUTH_COOKIE_PATHS.ACCESS_TOKEN,
+      maxAge: 0,
+    }),
+  );
+}
+
 function clearRefreshTokenCookie(res: Response): void {
-  res.setHeader(
+  res.append(
     "Set-Cookie",
     serialize(REFRESH_TOKEN_COOKIE_NAME, "", {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
-      path: "/api/auth",
+      secure: isProductionEnvironment(),
+      sameSite: AUTH_TOKEN_DEFAULTS.COOKIE_SAME_SITE,
+      path: AUTH_COOKIE_PATHS.REFRESH_TOKEN,
       maxAge: 0,
     }),
   );
 }
 
 function getRefreshTokenFromRequest(req: Request): string | null {
-  const cookieHeader = req.headers.cookie;
+  const cookieRefreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE_NAME];
 
-  if (cookieHeader) {
-    const cookies = Object.fromEntries(
-      cookieHeader.split(";").map((cookiePart) => {
-        const [rawName, ...rawValueParts] = cookiePart.trim().split("=");
-        return [rawName, decodeURIComponent(rawValueParts.join("="))];
-      }),
-    );
-
-    const cookieRefreshToken = cookies[REFRESH_TOKEN_COOKIE_NAME];
-
-    if (cookieRefreshToken) {
-      return cookieRefreshToken;
-    }
-  }
-
-  const parsedBody = refreshTokenSchema.safeParse(req.body);
-
-  if (parsedBody.success) {
-    return parsedBody.data.refreshToken;
+  if (cookieRefreshToken) {
+    return cookieRefreshToken;
   }
 
   return null;
@@ -84,27 +105,25 @@ export class AuthController {
     const { email, password } = loginSchema.parse(req.body);
     const result = await this.authService.login(email, password);
 
+    setAccessTokenCookie(res, result.accessToken);
     setRefreshTokenCookie(res, result.refreshToken);
 
-    res.status(200).json({
-      accessToken: result.accessToken,
-    });
+    res.status(200).json({});
   };
 
   refreshToken = async (req: Request, res: Response): Promise<void> => {
     const refreshToken = getRefreshTokenFromRequest(req);
 
     if (!refreshToken) {
-      throw new UnauthorizedError("Refresh token is required");
+      throw new UnauthorizedError(AUTH_ERROR_MESSAGES.REFRESH_TOKEN_REQUIRED);
     }
 
     const result = await this.authService.refreshToken(refreshToken);
 
+    setAccessTokenCookie(res, result.accessToken);
     setRefreshTokenCookie(res, result.refreshToken);
 
-    res.status(200).json({
-      accessToken: result.accessToken,
-    });
+    res.status(200).json({});
   };
 
   logout = async (req: Request, res: Response): Promise<void> => {
@@ -114,7 +133,9 @@ export class AuthController {
       await this.authService.logout(refreshToken);
     }
 
+    clearAccessTokenCookie(res);
     clearRefreshTokenCookie(res);
+
     res.status(204).send();
   };
 

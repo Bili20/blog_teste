@@ -4,6 +4,7 @@ import { IPostService } from "@/domain/interfaces/services/IPostService";
 import { authenticate } from "@/presentation/decorators/authenticate.decorator";
 import { requireRole } from "@/presentation/decorators/requireRole.decorator";
 import { requirePostOwnership } from "@/presentation/decorators/requirePostOwnership.decorator";
+import { ROLE_ADMIN, ROLE_AUTHOR } from "@/shared/constants/roles.constants";
 
 export function postRoutes(
   controller: PostController,
@@ -24,7 +25,7 @@ export function postRoutes(
 
   // ── Protected routes ─────────────────────────────────────────────────────────
   //
-  // Both "admin" and "author" roles are allowed to manage posts.
+  // Both ROLE_ADMIN and ROLE_AUTHOR are allowed to manage posts.
   //
   // Admin:  can list, create, edit and delete any post.
   // Author: can list, create, edit and delete only their own posts.
@@ -36,7 +37,7 @@ export function postRoutes(
   router.get(
     "/manage",
     authenticate,
-    requireRole("admin", "author"),
+    requireRole(ROLE_ADMIN, ROLE_AUTHOR),
     controller.listManagedPosts,
   );
 
@@ -47,7 +48,7 @@ export function postRoutes(
   router.post(
     "/",
     authenticate,
-    requireRole("admin", "author"),
+    requireRole(ROLE_ADMIN, ROLE_AUTHOR),
     controller.createPost,
   );
 
@@ -55,7 +56,7 @@ export function postRoutes(
   router.patch(
     "/:id",
     authenticate,
-    requireRole("admin", "author"),
+    requireRole(ROLE_ADMIN, ROLE_AUTHOR),
     requirePostOwnership(postService),
     controller.updatePost,
   );

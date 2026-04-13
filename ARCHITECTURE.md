@@ -419,10 +419,10 @@ Base URL: `http://localhost:3333/api`
 
 | Method | Path | Auth | Description |
 |---|---|---|---|
-| `POST` | `/auth/login` | — | Returns access token and sets refresh token cookie |
-| `POST` | `/auth/refresh` | — | Rotates refresh token from cookie (or request body fallback) and returns a new access token |
-| `POST` | `/auth/logout` | — | Revokes the current refresh token and clears the refresh token cookie |
-| `GET` | `/auth/me` | `JWT` | Returns the authenticated current user |
+| `POST` | `/auth/login` | — | Sets access token cookie and refresh token cookie |
+| `POST` | `/auth/refresh` | — | Rotates refresh token from cookie and refreshes the access token cookie |
+| `POST` | `/auth/logout` | — | Revokes the current refresh token and clears both auth cookies |
+| `GET` | `/auth/me` | `JWT cookie` | Returns the authenticated current user |
 
 #### Posts
 
@@ -506,37 +506,37 @@ Base URL: `http://localhost:3333/api`
 
 > Full detail is in `AUTH.md`. This section is a structural summary.
 
-The auth module now uses a **short-lived access token + persisted refresh token**
+The auth module now uses a **cookie-based access token + cookie-based refresh token**
 pattern at the API contract level.
 
 Current flow:
 1. `POST /auth/login`
    - validates credentials
-   - returns:
-     - `accessToken`
+   - sets the access token as an **HTTP-only cookie**
    - sets the refresh token as an **HTTP-only cookie**
    - stores only the hashed refresh token in `refresh_tokens`
 2. `POST /auth/refresh`
-   - reads the refresh token from the cookie by default
-   - still accepts request-body fallback for compatibility
+   - reads the refresh token from the cookie
    - hashes it
    - validates the stored record
    - rejects revoked or expired tokens
    - revokes the old refresh token record
    - issues a new access token
    - rotates the refresh token cookie
+   - refreshes the access token cookie
 3. `POST /auth/logout`
-   - reads the current refresh token
+   - reads the current refresh token from the cookie
    - revokes it if present and valid
    - clears the refresh token cookie
+   - clears the access token cookie
 4. `GET /auth/me`
-   - still uses the access token only
+   - reads the access token from the auth cookie
    - should remain DB-backed for current profile data
 
-**Refresh token transport rule:**
-- refresh tokens should be transported primarily through an **HTTP-only cookie**
-- the API should not require frontend JavaScript to read or persist the refresh token directly
-- request-body refresh token support exists only as a compatibility fallback during transition
+**Token transport rule:**
+- both access tokens and refresh tokens should be transported through **HTTP-only cookies**
+- the API should not require frontend JavaScript to read or persist either token directly
+- protected routes should authenticate from the access token cookie instead of relying on `Authorization` header fallback
 
 **Refresh token rotation rule:**
 - every successful refresh invalidates the previous refresh token
@@ -544,10 +544,11 @@ Current flow:
 
 **Cookie and transport rules:**
 - refresh token cookie path: `/api/auth`
-- cookie should be `httpOnly`
-- cookie should be `sameSite=strict`
-- cookie should be `secure` in production
-- auth CORS must allow credentials so browsers can send the refresh token cookie
+- access token cookie path should cover protected API routes (current target: `/api`)
+- both cookies should be `httpOnly`
+- both cookies should be `sameSite=strict`
+- both cookies should be `secure` in production
+- auth CORS must allow credentials so browsers can send the auth cookies
 
 **Environment variables in use:**
 - `JWT_SECRET`
@@ -850,9 +851,10 @@ Current admin UX relies heavily on these primitives instead of custom controls:
 **Credentialed auth transport:**
 - backend CORS is configured with `credentials: true`
 - auth cookie transport depends on browsers being allowed to send credentials
-- refresh token cookie parsing happens in a lightweight request middleware before routes
-- access tokens still travel through the `Authorization: Bearer <token>` header
-- refresh tokens now travel primarily through the auth cookie instead of being exposed in normal JSON responses
+- cookie parsing happens in a lightweight request middleware before routes
+- access tokens now travel through an auth cookie instead of being exposed in normal JSON responses
+- refresh tokens now travel through the auth cookie instead of being exposed in normal JSON responses
+- protected backend auth should now be treated as fully cookie-based
 
 **Admin feedback improvements:**
 - `App.tsx` mounts the shared `Toaster` from `src/components/ui/sonner.tsx`

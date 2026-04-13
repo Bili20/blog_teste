@@ -2,12 +2,14 @@
 
 > This document tracks the frontend login integration with `blog-api`.
 > Scope started as **authentication only**, and now reflects the current
-> implementation based on a **token + current-user** flow.
+> implementation based on a **cookie-based session + current-user** flow.
 >
 > Current auth contract:
-> - `POST /api/auth/login` returns only the JWT access token
+> - `POST /api/auth/login` validates credentials and sets auth cookies
+> - `POST /api/auth/refresh` rotates auth cookies and returns an empty success body
+> - `POST /api/auth/logout` revokes the current refresh token and clears auth cookies
 > - `GET /api/auth/me` returns the authenticated user profile
-> - the frontend stores token and user separately
+> - the frontend no longer stores JWT access tokens in `localStorage`
 > - the frontend uses the authenticated user as the source of truth for admin identity
 
 ---
@@ -19,7 +21,7 @@ Integrate the frontend with the backend auth module using:
 - `axios`
 - a dedicated login page
 - client-side auth state
-- token persistence
+- cookie-based session handling
 - current-user fetch after login
 - protected route support for admin-only areas
 
@@ -40,9 +42,13 @@ Integrate the frontend with the backend auth module using:
 
 #### Success response
 ```json
-{
-  "accessToken": "<jwt>"
-}
+{}
+```
+
+#### Set-Cookie
+```text
+accessToken=<jwt>; HttpOnly; SameSite=Strict; Path=/
+refreshToken=<opaque-refresh-token>; HttpOnly; SameSite=Strict; Path=/api/auth
 ```
 
 #### Error responses
@@ -54,7 +60,12 @@ Integrate the frontend with the backend auth module using:
 ### 2. Current user endpoint
 `GET /api/auth/me`
 
-#### Headers
+#### Auth transport
+```http
+Cookie: accessToken=<jwt>
+```
+
+Compatibility fallback:
 ```http
 Authorization: Bearer <jwt>
 ```
@@ -81,7 +92,7 @@ Authorization: Bearer <jwt>
 - create auth types
 - create auth service for login
 - create auth provider/context
-- persist token and logged user separately
+- use cookie-based auth transport
 - fetch current user after login
 - create login page
 - add login route
@@ -90,9 +101,6 @@ Authorization: Bearer <jwt>
 - support admin-only navigation
 
 ### Explicitly excluded from this phase
-- refresh token flow
-- cookie-based auth
-- token revocation
 - rate limiting UI
 - role management UI
 - advanced session recovery UX
@@ -106,16 +114,16 @@ The frontend does **not** trust login to return the full user object anymore.
 
 Flow:
 1. call `POST /api/auth/login`
-2. receive `accessToken`
-3. persist token
-4. call `GET /api/auth/me`
-5. persist authenticated user
-6. use that user in the app state
+2. backend sets `accessToken` and `refreshToken` cookies
+3. call `GET /api/auth/me`
+4. persist authenticated user if desired for UX only
+5. use that user in the app state
 
 Reason:
 - cleaner separation of concerns
 - easier to evolve auth payloads
-- better alignment with common backend auth patterns
+- better alignment with safer browser-based auth transport
+- frontend no longer needs direct access to raw tokens
 
 ---
 
@@ -123,7 +131,6 @@ Reason:
 Authentication state lives in a provider/context, not in pages.
 
 Current state shape:
-- `accessToken`
 - `user`
 - `isAuthenticated`
 - `isLoading`
@@ -134,11 +141,12 @@ Current state shape:
 ---
 
 ### 3. Token persistence
-Auth data is persisted in `localStorage` for now.
+JWT tokens are **not** persisted in `localStorage` anymore.
 
-Current keys:
-- `blog.auth.token`
-- `blog.auth.user`
+Current rule:
+- auth cookies are managed by the backend
+- the browser sends them automatically with credentialed requests
+- the frontend may cache the authenticated user for UX, but cookies remain the source of truth for session continuity
 
 ---
 
@@ -147,7 +155,7 @@ A single configured API client is used for all requests.
 
 It is responsible for:
 - setting `baseURL`
-- attaching `Authorization: Bearer <token>`
+- sending requests with credentials so auth cookies are included
 - being reused by all future modules
 
 ---
@@ -199,9 +207,7 @@ type AuthenticatedUser = {
 
 ### Login response
 ```ts
-type LoginResponse = {
-  accessToken: string;
-};
+type LoginResponse = Record<string, never>;
 ```
 
 ### Current user response
@@ -217,7 +223,6 @@ type CurrentUserResponse = {
 ### Auth state
 ```ts
 type AuthState = {
-  accessToken: string | null;
   user: AuthenticatedUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -270,8 +275,8 @@ Map backend responses to user-friendly messages:
 ### Current user errors
 Map backend responses to user-friendly behavior:
 
-- `401` on `/auth/me` → clear local session
-- invalid/expired token → force logout
+- `401` on `/auth/me` → attempt refresh flow, then clear session if refresh fails
+- invalid/expired access cookie → force logout if refresh cannot recover the session
 - network/server error during session refresh → treat session as invalid unless retry logic is explicitly added later
 
 ### Security rule
@@ -287,15 +292,13 @@ User submits email/password
   ↓
 POST /api/auth/login
   ↓
-Receive accessToken
-  ↓
-Persist token
+Backend sets auth cookies
   ↓
 GET /api/auth/me
   ↓
 Receive authenticated user
   ↓
-Persist user
+Persist user if needed for UX
   ↓
 Update AuthContext
   ↓
@@ -306,9 +309,11 @@ Redirect to target page
 ```text
 User clicks logout
   ↓
-Clear token from storage
+POST /api/auth/logout
   ↓
-Clear user from storage
+Backend clears auth cookies
+  ↓
+Clear user from storage if cached
   ↓
 Reset AuthContext
   ↓
@@ -319,13 +324,14 @@ Protected routes become inaccessible
 ```text
 App starts
   ↓
-Read token/user from storage
+Optionally read cached user from storage
   ↓
-If token exists, call refreshSession()
+Call refreshSession()
   ↓
 GET /api/auth/me
   ↓
 If success: update stored user
+If 401: optionally call POST /api/auth/refresh, then retry /auth/me
 If failure: clear session
 ```
 
@@ -356,11 +362,11 @@ Protected route infrastructure is already in place.
 
 ### State
 - [x] auth provider/context created
-- [x] token persistence implemented
-- [x] user persistence implemented
+- [x] cookie-based session transport implemented
+- [x] optional user persistence implemented
 - [x] logout implemented
 - [x] current-user fetch implemented after login
-- [x] auth bootstrap from storage implemented
+- [x] auth bootstrap implemented
 - [x] session refresh helper implemented
 
 ### UI
@@ -388,7 +394,7 @@ The current login module already follows some good practices:
 
 - backend returns the same `401` message for invalid email and invalid password
 - JWT is required for protected routes
-- frontend stores token and user separately
+- frontend no longer needs direct access to raw JWT tokens
 - frontend no longer depends on user data returned directly from login
 - current user is fetched through a dedicated endpoint
 - admin-only frontend routes are separated from public routes
@@ -397,18 +403,16 @@ The current login module already follows some good practices:
 
 ## Security Concerns Still Open
 
-### 1. JWT stored in `localStorage`
-This is still the main security tradeoff.
+### 1. Auth cookies now replace `localStorage` token storage
+The main auth transport has moved away from `localStorage`.
 
-Risk:
-- any XSS vulnerability in the frontend could expose the token
+Improvement:
+- `httpOnly` cookies reduce direct token exposure to frontend JavaScript
 
-Current status:
-- acceptable for the current stage
-- not the strongest option for production-hardening
-
-Recommended future improvement:
-- move to secure `httpOnly` cookies if architecture allows
+Current tradeoff:
+- cookie configuration still needs careful production review
+- cross-origin credential handling must be configured correctly
+- CSRF protections should continue to be reviewed as the app evolves
 
 ---
 
@@ -437,31 +441,30 @@ Recommended future improvement:
 
 ---
 
-### 4. No token revocation
-Current logout only clears the frontend session.
+### 4. Access token revocation is still limited
+Current logout revokes the refresh token and clears cookies, but access tokens are still stateless.
 
 That means:
-- the token remains valid until expiration
-- there is no server-side invalidation yet
+- the refresh session is invalidated server-side
+- already-issued access tokens remain valid until expiration unless additional revocation strategy is added
 
 Recommended future improvement:
-- refresh token rotation
 - token versioning
 - blocklist / revocation strategy
+- shorter access token lifetime if needed
 
 ---
 
-### 5. No refresh token flow
-Current auth uses only a single access token.
+### 5. Refresh token flow now exists, but frontend integration must stay aligned
+Current auth now supports refresh token rotation through backend-managed cookies.
 
-Tradeoff:
-- simpler implementation
-- weaker long-session UX and revocation control
+Current rule:
+- frontend should not read or persist refresh tokens directly
+- backend remains responsible for issuing, rotating, and clearing auth cookies
 
 Recommended future improvement:
-- short-lived access token
-- refresh token endpoint
-- rotation and invalidation strategy
+- validate refresh behavior end-to-end in the browser
+- add stronger session visibility and revocation controls if needed
 
 ---
 
@@ -480,16 +483,16 @@ Recommended future improvement:
 ### High priority
 1. Make `/auth/me` load the current user from the database
 2. Add rate limiting to `POST /api/auth/login`
-3. Validate session refresh behavior end-to-end on app bootstrap
+3. Validate cookie-based session refresh behavior end-to-end on app bootstrap
 
 ### Medium priority
-4. Add refresh token support
-5. Add token revocation / invalidation strategy
-6. Add audit logging for login attempts
+4. Add stronger access token revocation / invalidation strategy
+5. Add audit logging for login attempts
+6. Add stronger session visibility and management controls
 
 ### Long-term / architectural
-7. Consider migrating from `localStorage` JWT to secure `httpOnly` cookies
-8. Add stronger session management and device/session visibility if needed
+7. Review CSRF posture for all credentialed write requests
+8. Add device/session visibility if needed
 
 ---
 
@@ -497,10 +500,10 @@ Recommended future improvement:
 
 1. add rate limiting to `POST /api/auth/login`
 2. make `/auth/me` always load the current user from the database
-3. consider moving auth to secure `httpOnly` cookies
-4. add refresh token support if session duration becomes a UX issue
-5. add token revocation support
-6. add audit logging for login attempts
+3. validate cookie-based login / refresh / logout end-to-end
+4. add stronger token revocation support
+5. add audit logging for login attempts
+6. review CSRF posture for credentialed requests
 7. review frontend XSS exposure before production rollout
 
 ---

@@ -1,17 +1,12 @@
 import { createContext } from "react";
-import type {
-  AuthenticatedUser,
-  LoginRequest,
-  LoginResponse,
-} from "@/types/auth";
+import type { AuthenticatedUser, LoginRequest } from "@/types/auth";
 
 export interface AuthContextValue {
   user: AuthenticatedUser | null;
-  accessToken: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (credentials: LoginRequest) => Promise<LoginResponse>;
-  logout: () => void;
+  login: (credentials: LoginRequest) => Promise<void>;
+  logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
 }
 

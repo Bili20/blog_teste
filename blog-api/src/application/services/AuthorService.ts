@@ -15,10 +15,9 @@ import {
   NotFoundError,
 } from "@/shared/errors/AppError";
 import { prisma } from "@/infrastructure/database/prisma";
+import { ROLE_ADMIN, ROLE_AUTHOR } from "@/shared/constants/roles.constants";
 
 const BCRYPT_SALT_ROUNDS = 10;
-const ADMIN_ROLE_NAME = "admin";
-const AUTHOR_ROLE_NAME = "author";
 
 export class AuthorService implements IAuthorService {
   constructor(private readonly authorRepository: IAuthorRepository) {}
@@ -62,7 +61,7 @@ export class AuthorService implements IAuthorService {
     };
 
     const authorRole = await prisma.role.findUnique({
-      where: { name: AUTHOR_ROLE_NAME },
+      where: { name: ROLE_AUTHOR },
       select: { id: true },
     });
 
@@ -98,7 +97,7 @@ export class AuthorService implements IAuthorService {
 
   private async ensureAdminAccess(): Promise<void> {
     const adminRole = await prisma.role.findUnique({
-      where: { name: ADMIN_ROLE_NAME },
+      where: { name: ROLE_ADMIN },
       select: { id: true },
     });
 

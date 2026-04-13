@@ -5,9 +5,11 @@ import { IAuthRepository } from "@/domain/interfaces/repositories/IAuthRepositor
 import { IAuthService } from "@/domain/interfaces/services/IAuthService";
 import { CurrentUserResponse, LoginResponse } from "@/domain/entities/Auth";
 import { UnauthorizedError } from "@/shared/errors/AppError";
-
-const DEFAULT_ACCESS_TOKEN_EXPIRES_IN = "7d";
-const DEFAULT_REFRESH_TOKEN_EXPIRES_IN_DAYS = 30;
+import {
+  AUTH_ENV_KEYS,
+  AUTH_ERROR_MESSAGES,
+  AUTH_TOKEN_DEFAULTS,
+} from "@/shared/constants/auth.constants";
 
 export class AuthService implements IAuthService {
   constructor(private readonly authRepository: IAuthRepository) {}
@@ -16,13 +18,13 @@ export class AuthService implements IAuthService {
     const author = await this.authRepository.findByEmail(email);
 
     if (!author) {
-      throw new UnauthorizedError("Invalid credentials");
+      throw new UnauthorizedError(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS);
     }
 
     const passwordMatches = await bcrypt.compare(password, author.passwordHash);
 
     if (!passwordMatches) {
-      throw new UnauthorizedError("Invalid credentials");
+      throw new UnauthorizedError(AUTH_ERROR_MESSAGES.INVALID_CREDENTIALS);
     }
 
     return this.issueTokenPair({
@@ -42,7 +44,9 @@ export class AuthService implements IAuthService {
 
     if (!author) {
       await this.authRepository.revokeRefreshToken(storedRefreshToken.id);
-      throw new UnauthorizedError("Authenticated user not found");
+      throw new UnauthorizedError(
+        AUTH_ERROR_MESSAGES.AUTHENTICATED_USER_NOT_FOUND,
+      );
     }
 
     await this.authRepository.revokeRefreshToken(storedRefreshToken.id);
@@ -64,7 +68,9 @@ export class AuthService implements IAuthService {
     const author = await this.authRepository.findById(authorId);
 
     if (!author) {
-      throw new UnauthorizedError("Authenticated user not found");
+      throw new UnauthorizedError(
+        AUTH_ERROR_MESSAGES.AUTHENTICATED_USER_NOT_FOUND,
+      );
     }
 
     return {
@@ -110,16 +116,16 @@ export class AuthService implements IAuthService {
       await this.authRepository.findRefreshTokenByHash(tokenHash);
 
     if (!storedRefreshToken) {
-      throw new UnauthorizedError("Invalid refresh token");
+      throw new UnauthorizedError(AUTH_ERROR_MESSAGES.INVALID_REFRESH_TOKEN);
     }
 
     if (storedRefreshToken.revokedAt) {
-      throw new UnauthorizedError("Refresh token has been revoked");
+      throw new UnauthorizedError(AUTH_ERROR_MESSAGES.REVOKED_REFRESH_TOKEN);
     }
 
     if (storedRefreshToken.expiresAt.getTime() <= Date.now()) {
       await this.authRepository.revokeRefreshToken(storedRefreshToken.id);
-      throw new UnauthorizedError("Refresh token has expired");
+      throw new UnauthorizedError(AUTH_ERROR_MESSAGES.EXPIRED_REFRESH_TOKEN);
     }
 
     return storedRefreshToken;
@@ -131,15 +137,17 @@ export class AuthService implements IAuthService {
     name: string;
     roles: string[];
   }): string {
-    const secret = process.env.JWT_SECRET;
+    const secret = process.env[AUTH_ENV_KEYS.JWT_SECRET];
 
     if (!secret) {
-      throw new Error("JWT_SECRET environment variable is not configured");
+      throw new Error(
+        `${AUTH_ENV_KEYS.JWT_SECRET} environment variable is not configured`,
+      );
     }
 
     return jwt.sign(payload, secret, {
-      expiresIn: (process.env.JWT_EXPIRES_IN ??
-        DEFAULT_ACCESS_TOKEN_EXPIRES_IN) as jwt.SignOptions["expiresIn"],
+      expiresIn: (process.env[AUTH_ENV_KEYS.JWT_EXPIRES_IN] ??
+        AUTH_TOKEN_DEFAULTS.ACCESS_TOKEN_EXPIRES_IN) as jwt.SignOptions["expiresIn"],
     });
   }
 
@@ -153,14 +161,14 @@ export class AuthService implements IAuthService {
 
   private getRefreshTokenExpiryDate(): Date {
     const expiresInDays = Number(
-      process.env.REFRESH_TOKEN_EXPIRES_IN_DAYS ??
-        DEFAULT_REFRESH_TOKEN_EXPIRES_IN_DAYS,
+      process.env[AUTH_ENV_KEYS.REFRESH_TOKEN_EXPIRES_IN_DAYS] ??
+        AUTH_TOKEN_DEFAULTS.REFRESH_TOKEN_EXPIRES_IN_DAYS,
     );
 
     const safeExpiresInDays =
       Number.isFinite(expiresInDays) && expiresInDays > 0
         ? expiresInDays
-        : DEFAULT_REFRESH_TOKEN_EXPIRES_IN_DAYS;
+        : AUTH_TOKEN_DEFAULTS.REFRESH_TOKEN_EXPIRES_IN_DAYS;
 
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + safeExpiresInDays);

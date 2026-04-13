@@ -1,232 +1,117 @@
-# Blog API — The Margin
+# Backend Context Index
 
-REST API para o blog **The Margin**, construída com Node.js, Prisma e SQLite.
+This directory keeps only the **essential backend context documents** that explain
+what the API is, how authentication works, and which rules future changes must
+respect.
 
-## Stack
+## Purpose
 
-- **Runtime**: Node.js (latest)
-- **Framework**: Express 4
-- **ORM**: Prisma (latest)
-- **Banco de dados**: SQLite
-- **Linguagem**: TypeScript 5
-- **Validação**: Zod
-- **Build**: tsx (dev) + tsc (prod)
+Use the files in this folder to quickly understand:
 
-## Arquitetura
+- the backend architecture and responsibility boundaries
+- the authentication and authorization model
+- the current security rules and constraints
+- the implementation expectations that should not be broken by future work
 
-```
-src/
-├── domain/                         # Regras de negócio puras
-│   ├── entities/                   # Tipos das entidades (Post, Author, Tag)
-│   └── interfaces/
-│       ├── repositories/           # Contratos dos repositórios (inversão de dependência)
-│       └── services/               # Contratos dos services
-│
-├── application/                    # Casos de uso
-│   └── services/                   # Implementações dos services (PostService, etc.)
-│
-├── infrastructure/                 # Detalhes de implementação
-│   ├── database/                   # Prisma client singleton
-│   └── repositories/               # Implementações Prisma dos repositórios
-│
-├── presentation/                   # Camada HTTP
-│   ├── controllers/                # Recebem Request, delegam ao service, enviam Response
-│   ├── routes/                     # Mapeamento de rotas → controllers
-│   └── middlewares/                # errorHandler, requestLogger
-│
-├── shared/
-│   ├── errors/                     # AppError, NotFoundError, ConflictError, ValidationError
-│   └── utils/                      # Schemas Zod de validação
-│
-├── app.ts                          # Factory da aplicação Express (DI manual)
-└── server.ts                       # Bootstrap + graceful shutdown
-```
-
-## Começando
-
-### 1. Instalar dependências
-
-```bash
-npm install
-```
-
-### 2. Configurar variáveis de ambiente
-
-```bash
-cp .env.example .env
-```
-
-O `.env.example` já vem com valores padrão para desenvolvimento local:
-
-```env
-DATABASE_URL="file:./dev.db"
-PORT=3333
-NODE_ENV=development
-```
-
-### 3. Gerar o Prisma client e criar o banco
-
-```bash
-npm run db:generate   # gera o client TypeScript do Prisma
-npm run db:migrate    # aplica as migrations e cria o SQLite via libsql
-```
-
-### 4. Popular o banco com dados iniciais
-
-```bash
-npm run db:seed
-```
-
-Isso cria 3 autores, 15 tags e 5 posts completos (os mesmos do frontend).
-
-### 5. Iniciar em modo desenvolvimento
-
-```bash
-npm run dev
-```
-
-O servidor sobe em `http://localhost:3333` com hot-reload via `tsx watch`.
+This folder should stay small and focused. It is **not** meant to keep old
+phase-by-phase progress notes once those notes are no longer useful.
 
 ---
 
-## Scripts disponíveis
+## Essential Documents
 
-| Script | Descrição |
-|--------|-----------|
-| `npm run dev` | Inicia com hot-reload (tsx watch) |
-| `npm run build` | Compila TypeScript para `/dist` |
-| `npm run start` | Inicia a build compilada |
-| `npm run db:migrate` | Cria/atualiza o banco com as migrations |
-| `npm run db:generate` | Regenera o Prisma client |
-| `npm run db:seed` | Popula o banco com dados iniciais |
-| `npm run db:studio` | Abre o Prisma Studio (GUI do banco) |
-| `npm run db:reset` | Reseta o banco e re-executa o seed |
+### `AUTH.md`
+Primary reference for the backend authentication and authorization system.
 
----
+Covers:
 
-## Endpoints
+- JWT access token behavior
+- refresh token persistence and rotation
+- cookie-based auth transport
+- `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`
+- role-based authorization rules
+- protected route expectations
+- current auth security limitations and future hardening priorities
 
-### Health
+Use this when working on:
 
-```
-GET /health
-```
-
----
-
-### Posts
-
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `GET` | `/api/posts` | Lista posts com paginação e filtros |
-| `GET` | `/api/posts/featured` | Retorna o post em destaque |
-| `GET` | `/api/posts/:id` | Busca post por ID |
-| `GET` | `/api/posts/slug/:slug` | Busca post por slug |
-| `POST` | `/api/posts` | Cria novo post |
-| `PATCH` | `/api/posts/:id` | Atualiza post |
-| `DELETE` | `/api/posts/:id` | Remove post |
-
-**Query params de `/api/posts`:**
-
-| Param | Tipo | Exemplo |
-|-------|------|---------|
-| `category` | string | `Essay`, `Practice`, `Work`, `Tools` |
-| `tag` | string | `culture` |
-| `search` | string | `internet` |
-| `published` | boolean | `true` |
-| `page` | number | `1` |
-| `limit` | number | `10` |
-
-**Exemplo de resposta paginada:**
-
-```json
-{
-  "data": [...],
-  "total": 5,
-  "page": 1,
-  "limit": 10,
-  "totalPages": 1
-}
-```
-
-**Corpo para `POST /api/posts`:**
-
-```json
-{
-  "title": "Meu Novo Post",
-  "subtitle": "Um subtítulo descritivo",
-  "excerpt": "Um resumo do post com pelo menos 10 caracteres.",
-  "body": "Conteúdo completo do post...",
-  "category": "Essay",
-  "readTime": "5 min",
-  "authorId": "<id-do-autor>",
-  "tagSlugs": ["culture", "technology"],
-  "featured": false,
-  "published": true
-}
-```
+- login
+- logout
+- refresh token flow
+- auth cookies
+- protected routes
+- role checks
+- auth-related security improvements
 
 ---
 
-### Authors
+## Source of Truth Hierarchy
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `GET` | `/api/authors` | Lista todos os autores |
-| `GET` | `/api/authors/:id` | Busca autor por ID |
-| `POST` | `/api/authors` | Cria novo autor |
-| `PATCH` | `/api/authors/:id` | Atualiza autor |
-| `DELETE` | `/api/authors/:id` | Remove autor |
+When there is any conflict, use this order:
 
-**Corpo para `POST /api/authors`:**
+1. actual backend code in `src/`
+2. project-wide architecture documentation
+3. the essential context files in this folder
 
-```json
-{
-  "name": "João Silva",
-  "initials": "JS",
-  "bio": "Escritor e desenvolvedor."
-}
-```
+These documents guide development, but the implemented code remains the final
+source of truth.
 
 ---
 
-### Tags
+## Current Backend Direction
 
-| Método | Rota | Descrição |
-|--------|------|-----------|
-| `GET` | `/api/tags` | Lista todas as tags |
-| `GET` | `/api/tags/:id` | Busca tag por ID |
-| `POST` | `/api/tags` | Cria nova tag |
-| `DELETE` | `/api/tags/:id` | Remove tag |
+The backend currently follows these principles:
+
+- clean architecture separation
+- cookie-based authentication
+- backend-managed session tokens
+- role-based authorization
+- Prisma-backed persistence
+- centralized validation and error handling
+- explicit security hardening backlog for auth
 
 ---
 
-## Respostas de erro
+## Keep / Remove Policy
 
-Todos os erros seguem o mesmo formato:
+### Keep
+Keep documents here only if they explain:
 
-```json
-{
-  "error": "NotFoundError",
-  "message": "Post not found"
-}
-```
+- a current backend rule that is easy to break
+- an architectural constraint that future work must respect
+- a security rule that should remain visible during maintenance
+- a current system behavior that is not obvious from a quick code scan
 
-Erros de validação (Zod) retornam `422`:
+### Remove
+Remove documents here if they are:
 
-```json
-{
-  "error": "Validation Error",
-  "issues": [
-    { "field": "title", "message": "String must contain at least 3 character(s)" }
-  ]
-}
-```
+- temporary implementation notes
+- completed phase trackers
+- duplicated with broader architecture docs
+- outdated after major refactors
+- generic template files that do not describe this project
 
-| Status | Tipo |
-|--------|------|
-| `400` | AppError genérico |
-| `404` | NotFoundError |
-| `409` | ConflictError (slug duplicado, etc.) |
-| `422` | ValidationError (Zod) |
-| `500` | InternalServerError |
+---
+
+## Maintenance Rule
+
+When backend behavior changes:
+
+- update the essential docs that still matter
+- prefer revising existing docs instead of creating many temporary files
+- remove stale context files once their content is reflected in code or broader architecture docs
+
+This folder should help someone understand the backend quickly, not force them
+to read historical implementation debris.
+
+---
+
+## Final Note
+
+If you add a new document here, it should answer at least one of these:
+
+- What backend rule exists today that is not obvious from a quick code scan?
+- What architectural constraint must future backend work respect?
+- What security behavior would be easy to break without written guidance?
+
+If it does not answer one of those, it probably should not stay in this folder.
