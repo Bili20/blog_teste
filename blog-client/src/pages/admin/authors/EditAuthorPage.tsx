@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -12,22 +14,7 @@ import {
   type Author,
   type UpdateAuthorRequest,
 } from "@/services/authorService";
-
-type EditAuthorFormValues = {
-  name: string;
-  initials: string;
-  bio: string;
-};
-
-type EditAuthorFormErrors = Partial<Record<keyof EditAuthorFormValues, string>>;
-
-function buildInitialFormValues(author: Author): EditAuthorFormValues {
-  return {
-    name: author.name,
-    initials: author.initials,
-    bio: author.bio ?? "",
-  };
-}
+import { editAuthorSchema, type EditAuthorFormValues } from "@/lib/schemas";
 
 function getErrorMessage(error: unknown): string {
   if (
@@ -50,13 +37,21 @@ export default function EditAuthorPage() {
 
   const authorId = params.id ?? "";
 
-  const [formValues, setFormValues] = useState<EditAuthorFormValues | null>(
-    null,
-  );
-  const [formErrors, setFormErrors] = useState<EditAuthorFormErrors>({});
+  const [author, setAuthor] = useState<Author | null>(null);
   const [isLoadingAuthor, setIsLoadingAuthor] = useState<boolean>(true);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<EditAuthorFormValues>({
+    resolver: zodResolver(editAuthorSchema),
+    defaultValues: { name: "", initials: "", bio: "" },
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -74,12 +69,12 @@ export default function EditAuthorPage() {
       setApiErrorMessage(null);
 
       try {
-        const author = await getAuthorById(authorId);
+        const fetchedAuthor = await getAuthorById(authorId);
         if (!isMounted) return;
-        setFormValues(buildInitialFormValues(author));
+        setAuthor(fetchedAuthor);
       } catch (error) {
         if (!isMounted) return;
-        setFormValues(null);
+        setAuthor(null);
         setApiErrorMessage(getErrorMessage(error));
       } finally {
         if (isMounted) setIsLoadingAuthor(false);
@@ -93,10 +88,42 @@ export default function EditAuthorPage() {
     };
   }, [authorId]);
 
+  useEffect(() => {
+    if (author) {
+      reset({
+        name: author.name,
+        initials: author.initials,
+        bio: author.bio ?? "",
+      });
+    }
+  }, [author, reset]);
+
+  const watchedName = watch("name");
+
   const pageTitle = useMemo(() => {
-    if (!formValues?.name) return "Edit author";
-    return `Edit: ${formValues.name}`;
-  }, [formValues?.name]);
+    if (!watchedName) return "Edit author";
+    return `Edit: ${watchedName}`;
+  }, [watchedName]);
+
+  const onSubmit = async (data: EditAuthorFormValues) => {
+    setApiErrorMessage(null);
+
+    const payload: UpdateAuthorRequest = {
+      name: data.name.trim(),
+      initials: data.initials.trim(),
+      bio: data.bio.trim() || undefined,
+    };
+
+    try {
+      await updateAuthor(authorId, payload);
+      toast.success("Author updated successfully.");
+      navigate("/admin/authors", { replace: true });
+    } catch (error) {
+      const message = getErrorMessage(error);
+      setApiErrorMessage(message);
+      toast.error(message);
+    }
+  };
 
   if (isAuthLoading) {
     return (
@@ -142,7 +169,7 @@ export default function EditAuthorPage() {
     );
   }
 
-  if (!formValues) {
+  if (!author) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-24 text-center">
         <p className="text-xs tracking-widest uppercase text-amber-700 font-semibold mb-4">
@@ -163,72 +190,6 @@ export default function EditAuthorPage() {
       </div>
     );
   }
-
-  const handleFieldChange = <K extends keyof EditAuthorFormValues>(
-    field: K,
-    value: EditAuthorFormValues[K],
-  ) => {
-    setFormValues((prev) => (prev ? { ...prev, [field]: value } : prev));
-    setFormErrors((prev) => ({ ...prev, [field]: undefined }));
-    if (apiErrorMessage) setApiErrorMessage(null);
-  };
-
-  const validateForm = (values: EditAuthorFormValues): EditAuthorFormErrors => {
-    const errors: EditAuthorFormErrors = {};
-
-    if (values.name.trim().length < 2) {
-      errors.name = "Name must be at least 2 characters.";
-    }
-
-    if (values.name.trim().length > 100) {
-      errors.name = "Name must be at most 100 characters.";
-    }
-
-    const trimmedInitials = values.initials.trim();
-    if (trimmedInitials.length < 2 || trimmedInitials.length > 3) {
-      errors.initials = "Initials must be 2 or 3 characters.";
-    } else if (!/^[A-Z]+$/.test(trimmedInitials)) {
-      errors.initials = "Initials must be uppercase letters only.";
-    }
-
-    if (values.bio.trim().length > 500) {
-      errors.bio = "Bio must be at most 500 characters.";
-    }
-
-    return errors;
-  };
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const errors = validateForm(formValues);
-
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors);
-      return;
-    }
-
-    setIsSubmitting(true);
-    setApiErrorMessage(null);
-
-    const payload: UpdateAuthorRequest = {
-      name: formValues.name.trim(),
-      initials: formValues.initials.trim(),
-      bio: formValues.bio.trim() || undefined,
-    };
-
-    try {
-      await updateAuthor(authorId, payload);
-      toast.success("Author updated successfully.");
-      navigate("/admin/authors", { replace: true });
-    } catch (error) {
-      const message = getErrorMessage(error);
-      setApiErrorMessage(message);
-      toast.error(message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-12">
@@ -251,50 +212,57 @@ export default function EditAuthorPage() {
         </Link>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         <div className="border border-stone-200 bg-white p-8 space-y-6">
+          {/* Name */}
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
               id="name"
-              value={formValues.name}
-              onChange={(e) => handleFieldChange("name", e.target.value)}
+              {...register("name")}
               disabled={isSubmitting}
               className="rounded-none"
               placeholder="Mara Voss"
             />
-            {formErrors.name && (
-              <p className="text-sm text-red-700">{formErrors.name}</p>
+            {errors.name && (
+              <p className="text-sm text-red-700">{errors.name.message}</p>
             )}
           </div>
 
+          {/* Initials */}
           <div className="space-y-2">
             <Label htmlFor="initials">Initials</Label>
-            <Input
-              id="initials"
-              value={formValues.initials}
-              onChange={(e) =>
-                handleFieldChange("initials", e.target.value.toUpperCase())
-              }
-              disabled={isSubmitting}
-              maxLength={3}
-              className="rounded-none w-24"
-              placeholder="MV"
+            <Controller
+              name="initials"
+              control={control}
+              render={({ field }) => (
+                <Input
+                  id="initials"
+                  {...field}
+                  onChange={(event) =>
+                    field.onChange(event.target.value.toUpperCase())
+                  }
+                  disabled={isSubmitting}
+                  maxLength={3}
+                  className="rounded-none w-24"
+                  placeholder="MV"
+                />
+              )}
             />
             <p className="text-xs text-stone-400">
               2 or 3 uppercase letters used in the author avatar.
             </p>
-            {formErrors.initials && (
-              <p className="text-sm text-red-700">{formErrors.initials}</p>
+            {errors.initials && (
+              <p className="text-sm text-red-700">{errors.initials.message}</p>
             )}
           </div>
 
+          {/* Bio */}
           <div className="space-y-2">
             <Label htmlFor="bio">Bio</Label>
             <Textarea
               id="bio"
-              value={formValues.bio}
-              onChange={(e) => handleFieldChange("bio", e.target.value)}
+              {...register("bio")}
               disabled={isSubmitting}
               className="rounded-none min-h-[120px]"
               placeholder="A short bio that appears alongside posts."
@@ -302,8 +270,8 @@ export default function EditAuthorPage() {
             <p className="text-xs text-stone-400">
               Optional. Maximum 500 characters.
             </p>
-            {formErrors.bio && (
-              <p className="text-sm text-red-700">{formErrors.bio}</p>
+            {errors.bio && (
+              <p className="text-sm text-red-700">{errors.bio.message}</p>
             )}
           </div>
 

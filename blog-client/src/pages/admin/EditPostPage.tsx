@@ -1,33 +1,16 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import {
-  PostForm,
-  type PostFormErrors,
-  type PostFormValues,
-} from "@/components/PostForm";
+import { PostForm } from "@/components/PostForm";
 import { useAuth } from "@/hooks/useAuth";
 import { listAuthors, type Author } from "../../services/authorService";
 import { listTags } from "@/services/tagService";
 import { getPostById, updatePost } from "@/services/postService";
 import type { Post, UpdatePostRequest } from "@/types/post";
 import type { Tag } from "@/types/tag";
-
-function buildInitialFormValues(post: Post): PostFormValues {
-  return {
-    title: post.title,
-    subtitle: post.subtitle,
-    excerpt: post.excerpt,
-    body: post.body,
-    category: post.category,
-    readTime: post.readTime,
-    slug: post.slug,
-    featured: post.featured,
-    published: post.published,
-    authorId: post.authorId,
-    selectedTagSlugs: post.tags.map((tag) => tag.slug),
-  };
-}
+import { postSchema, type PostSchemaValues } from "@/lib/schemas";
 
 function getErrorMessage(error: unknown): string {
   if (
@@ -43,10 +26,6 @@ function getErrorMessage(error: unknown): string {
   return "Unable to update the post right now.";
 }
 
-function isKebabCase(value: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
-}
-
 export default function EditPostPage() {
   const params = useParams();
   const navigate = useNavigate();
@@ -54,10 +33,8 @@ export default function EditPostPage() {
 
   const postId = params.id ?? "";
 
-  const [formValues, setFormValues] = useState<PostFormValues | null>(null);
-  const [formErrors, setFormErrors] = useState<PostFormErrors>({});
+  const [post, setPost] = useState<Post | null>(null);
   const [isLoadingPost, setIsLoadingPost] = useState<boolean>(true);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -70,6 +47,32 @@ export default function EditPostPage() {
   const [tagOptions, setTagOptions] = useState<Tag[]>([]);
   const [isLoadingTags, setIsLoadingTags] = useState<boolean>(true);
   const [tagsErrorMessage, setTagsErrorMessage] = useState<string | null>(null);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<PostSchemaValues>({
+    resolver: zodResolver(postSchema),
+    defaultValues: {
+      title: "",
+      subtitle: "",
+      excerpt: "",
+      body: "",
+      category: "Essay",
+      readTime: "",
+      slug: "",
+      featured: false,
+      published: true,
+      authorId: "",
+      selectedTagSlugs: [],
+    },
+  });
+
+  const watchedTitle = watch("title");
 
   // Only admins can select a different author — skip the network request for
   // non-admin users entirely.
@@ -160,15 +163,15 @@ export default function EditPostPage() {
       setApiErrorMessage(null);
 
       try {
-        const post = await getPostById(postId);
+        const loadedPost = await getPostById(postId);
 
         if (!isMounted) return;
 
-        setFormValues(buildInitialFormValues(post));
+        setPost(loadedPost);
       } catch (error) {
         if (!isMounted) return;
 
-        setFormValues(null);
+        setPost(null);
         setApiErrorMessage(getErrorMessage(error));
       } finally {
         if (isMounted) {
@@ -184,10 +187,28 @@ export default function EditPostPage() {
     };
   }, [postId]);
 
+  useEffect(() => {
+    if (post) {
+      reset({
+        title: post.title,
+        subtitle: post.subtitle,
+        excerpt: post.excerpt,
+        body: post.body,
+        category: post.category,
+        readTime: post.readTime,
+        slug: post.slug,
+        featured: post.featured,
+        published: post.published,
+        authorId: post.authorId,
+        selectedTagSlugs: post.tags.map((tag) => tag.slug),
+      });
+    }
+  }, [post, reset]);
+
   const pageTitle = useMemo(() => {
-    if (!formValues?.title) return "Edit post";
-    return `Edit: ${formValues.title}`;
-  }, [formValues?.title]);
+    if (!watchedTitle) return "Edit post";
+    return `Edit: ${watchedTitle}`;
+  }, [watchedTitle]);
 
   if (isAuthLoading) {
     return (
@@ -237,7 +258,7 @@ export default function EditPostPage() {
     );
   }
 
-  if (!formValues) {
+  if (!post) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-24 text-center">
         <p className="text-xs tracking-widest uppercase text-amber-700 font-semibold mb-4">
@@ -259,131 +280,36 @@ export default function EditPostPage() {
     );
   }
 
-  const handleFieldChange = <FieldName extends keyof PostFormValues>(
-    fieldName: FieldName,
-    fieldValue: PostFormValues[FieldName],
-  ) => {
-    setFormValues((currentFormValues) => {
-      if (!currentFormValues) return currentFormValues;
-
-      return {
-        ...currentFormValues,
-        [fieldName]: fieldValue,
-      };
-    });
-
-    setFormErrors((currentErrors) => ({
-      ...currentErrors,
-      [fieldName]: undefined,
-    }));
-
-    if (apiErrorMessage) setApiErrorMessage(null);
-    if (successMessage) setSuccessMessage(null);
-  };
-
-  const handleTagToggle = (tagSlug: string, isChecked: boolean) => {
-    setFormValues((currentFormValues) => {
-      if (!currentFormValues) return currentFormValues;
-
-      const nextSelectedTagSlugs = isChecked
-        ? currentFormValues.selectedTagSlugs.includes(tagSlug)
-          ? currentFormValues.selectedTagSlugs
-          : [...currentFormValues.selectedTagSlugs, tagSlug]
-        : currentFormValues.selectedTagSlugs.filter(
-            (currentTagSlug) => currentTagSlug !== tagSlug,
-          );
-
-      return {
-        ...currentFormValues,
-        selectedTagSlugs: nextSelectedTagSlugs,
-      };
-    });
-
-    setFormErrors((currentErrors) => ({
-      ...currentErrors,
-      selectedTagSlugs: undefined,
-    }));
-
-    if (apiErrorMessage) setApiErrorMessage(null);
-    if (successMessage) setSuccessMessage(null);
-  };
-
-  const validateForm = (values: PostFormValues): PostFormErrors => {
-    const nextErrors: PostFormErrors = {};
-    const normalizedSlug = values.slug.trim();
-
-    if (values.title.trim().length < 3) {
-      nextErrors.title = "Title must be at least 3 characters.";
-    }
-
-    if (values.subtitle.trim().length < 3) {
-      nextErrors.subtitle = "Subtitle must be at least 3 characters.";
-    }
-
-    if (values.excerpt.trim().length < 10) {
-      nextErrors.excerpt = "Excerpt must be at least 10 characters.";
-    }
-
-    if (values.body.trim().length < 20) {
-      nextErrors.body = "Body must be at least 20 characters.";
-    }
-
-    if (values.readTime.trim().length < 1) {
-      nextErrors.readTime = "Read time is required.";
-    }
-
-    if (isAdmin && values.authorId.trim().length < 1) {
-      nextErrors.authorId = "Author is required.";
-    }
-
-    if (normalizedSlug && !isKebabCase(normalizedSlug)) {
-      nextErrors.slug = "Slug must be kebab-case.";
-    }
-
-    return nextErrors;
-  };
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    const nextErrors = validateForm(formValues);
-
-    if (Object.keys(nextErrors).length > 0) {
-      setFormErrors(nextErrors);
-      return;
-    }
-
-    setIsSubmitting(true);
+  const onSubmit = async (data: PostSchemaValues): Promise<void> => {
     setApiErrorMessage(null);
     setSuccessMessage(null);
 
     const payload: UpdatePostRequest = {
-      title: formValues.title.trim(),
-      subtitle: formValues.subtitle.trim(),
-      excerpt: formValues.excerpt.trim(),
-      body: formValues.body.trim(),
-      category: formValues.category,
-      readTime: formValues.readTime.trim(),
-      slug: formValues.slug.trim() || undefined,
-      featured: formValues.featured,
-      published: formValues.published,
+      title: data.title.trim(),
+      subtitle: data.subtitle.trim(),
+      excerpt: data.excerpt.trim(),
+      body: data.body.trim(),
+      category: data.category,
+      readTime: data.readTime.trim(),
+      slug: data.slug.trim() || undefined,
+      featured: data.featured,
+      published: data.published,
       // For author role the backend will override authorId with req.user.sub anyway,
       // but we still send it for completeness.
-      authorId: formValues.authorId.trim(),
-      tagSlugs: formValues.selectedTagSlugs,
+      authorId: data.authorId.trim(),
+      tagSlugs: data.selectedTagSlugs,
     };
 
     try {
       await updatePost(postId, payload);
-      const successMessage = "Post updated successfully.";
-      setSuccessMessage(successMessage);
+      const updatedMessage = "Post updated successfully.";
+      setSuccessMessage(updatedMessage);
       toast.success("Post updated", {
-        description: successMessage,
+        description: updatedMessage,
       });
-
       navigate("/admin/posts", {
         replace: true,
-        state: { successMessage },
+        state: { successMessage: updatedMessage },
       });
     } catch (error) {
       const message = getErrorMessage(error);
@@ -391,8 +317,6 @@ export default function EditPostPage() {
       toast.error("Unable to update post", {
         description: message,
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -421,8 +345,9 @@ export default function EditPostPage() {
         mode="edit"
         title={pageTitle}
         description={`Editing as ${user.name}.`}
-        values={formValues}
-        errors={formErrors}
+        register={register}
+        control={control}
+        errors={errors}
         isSubmitting={isSubmitting}
         isLoadingAuthors={isLoadingAuthors}
         isLoadingTags={isLoadingTags}
@@ -438,9 +363,7 @@ export default function EditPostPage() {
         authorReadOnly={!isAdmin}
         currentAuthorName={user.name}
         canSetFeatured={isAdmin}
-        onFieldChange={handleFieldChange}
-        onTagToggle={handleTagToggle}
-        onSubmit={handleSubmit}
+        onSubmit={handleSubmit(onSubmit)}
         onCancelPath="/admin/posts"
       />
     </div>

@@ -1,14 +1,12 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/useAuth";
-
-type LoginFormState = {
-  email: string;
-  password: string;
-};
+import { loginSchema, type LoginFormValues } from "@/lib/schemas";
 
 function getErrorMessage(error: unknown): string {
   if (typeof error === "string" && error.trim()) {
@@ -33,11 +31,14 @@ export default function LoginPage() {
   const location = useLocation();
   const { login, isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
-  const [formState, setFormState] = useState<LoginFormState>({
-    email: "",
-    password: "",
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
 
   const redirectPath = useMemo(() => {
@@ -49,42 +50,18 @@ export default function LoginPage() {
     return <Navigate to={redirectPath} replace />;
   }
 
-  const handleInputChange = (
-    fieldName: keyof LoginFormState,
-    fieldValue: string,
-  ) => {
-    setFormState((currentFormState) => ({
-      ...currentFormState,
-      [fieldName]: fieldValue,
-    }));
-
-    if (apiErrorMessage) {
-      setApiErrorMessage(null);
-    }
-  };
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!formState.email.trim() || !formState.password.trim()) {
-      setApiErrorMessage("Email and password are required.");
-      return;
-    }
-
-    setIsSubmitting(true);
+  const onSubmit = async (data: LoginFormValues) => {
     setApiErrorMessage(null);
 
     try {
       await login({
-        email: formState.email.trim(),
-        password: formState.password,
+        email: data.email,
+        password: data.password,
       });
 
       navigate(redirectPath, { replace: true });
     } catch (error) {
       setApiErrorMessage(getErrorMessage(error));
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -104,7 +81,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
           <div className="space-y-2">
             <Label htmlFor="email" className="text-stone-700">
               Email
@@ -114,13 +91,13 @@ export default function LoginPage() {
               type="email"
               autoComplete="email"
               placeholder="mara@themargin.com"
-              value={formState.email}
-              onChange={(event) =>
-                handleInputChange("email", event.target.value)
-              }
+              {...register("email")}
               disabled={isSubmitting}
               className="rounded-none border-stone-200 focus-visible:ring-0 focus-visible:border-stone-400"
             />
+            {errors.email && (
+              <p className="text-sm text-red-700">{errors.email.message}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -132,13 +109,13 @@ export default function LoginPage() {
               type="password"
               autoComplete="current-password"
               placeholder="Enter your password"
-              value={formState.password}
-              onChange={(event) =>
-                handleInputChange("password", event.target.value)
-              }
+              {...register("password")}
               disabled={isSubmitting}
               className="rounded-none border-stone-200 focus-visible:ring-0 focus-visible:border-stone-400"
             />
+            {errors.password && (
+              <p className="text-sm text-red-700">{errors.password.message}</p>
+            )}
           </div>
 
           {apiErrorMessage && (

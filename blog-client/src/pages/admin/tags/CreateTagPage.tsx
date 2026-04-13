@@ -1,4 +1,6 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -7,22 +9,7 @@ import { Label } from "@/components/ui/label";
 import { createTag } from "@/services/tagService";
 import { useAuth } from "@/hooks/useAuth";
 import type { CreateTagRequest } from "@/types/tag";
-
-type CreateTagFormValues = {
-  name: string;
-  slug: string;
-};
-
-type CreateTagFormErrors = Partial<Record<keyof CreateTagFormValues, string>>;
-
-const INITIAL_FORM_VALUES: CreateTagFormValues = {
-  name: "",
-  slug: "",
-};
-
-function isKebabCase(value: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
-}
+import { createTagSchema, type CreateTagFormValues } from "@/lib/schemas";
 
 function getErrorMessage(error: unknown): string {
   if (
@@ -42,11 +29,15 @@ export default function CreateTagPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
-  const [formValues, setFormValues] =
-    useState<CreateTagFormValues>(INITIAL_FORM_VALUES);
-  const [formErrors, setFormErrors] = useState<CreateTagFormErrors>({});
+  const {
+    register,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<CreateTagFormValues>({
+    resolver: zodResolver(createTagSchema),
+  });
+
   const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const pageTitle = useMemo(() => "Create tag", []);
 
@@ -76,60 +67,12 @@ export default function CreateTagPage() {
     return <Navigate to="/" replace />;
   }
 
-  const handleFieldChange = <FieldName extends keyof CreateTagFormValues>(
-    fieldName: FieldName,
-    fieldValue: CreateTagFormValues[FieldName],
-  ) => {
-    setFormValues((currentFormValues) => ({
-      ...currentFormValues,
-      [fieldName]: fieldValue,
-    }));
-
-    setFormErrors((currentErrors) => ({
-      ...currentErrors,
-      [fieldName]: undefined,
-    }));
-
-    if (apiErrorMessage) {
-      setApiErrorMessage(null);
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const nextErrors: CreateTagFormErrors = {};
-    const normalizedName = formValues.name.trim();
-    const normalizedSlug = formValues.slug.trim();
-
-    if (normalizedName.length < 1) {
-      nextErrors.name = "Name is required.";
-    }
-
-    if (normalizedName.length > 50) {
-      nextErrors.name = "Name must be at most 50 characters.";
-    }
-
-    if (normalizedSlug && !isKebabCase(normalizedSlug)) {
-      nextErrors.slug = "Slug must be in kebab-case.";
-    }
-
-    setFormErrors(nextErrors);
-
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
+  const onSubmit = async (data: CreateTagFormValues) => {
     setApiErrorMessage(null);
 
     const payload: CreateTagRequest = {
-      name: formValues.name.trim(),
-      slug: formValues.slug.trim() || undefined,
+      name: data.name.trim(),
+      slug: data.slug.trim() || undefined,
     };
 
     try {
@@ -144,8 +87,6 @@ export default function CreateTagPage() {
       toast.error("Unable to create tag", {
         description: message,
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -172,22 +113,19 @@ export default function CreateTagPage() {
         </Link>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-8">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         <div className="border border-stone-200 bg-white p-8 space-y-6">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
             <Input
               id="name"
-              value={formValues.name}
-              onChange={(event) =>
-                handleFieldChange("name", event.target.value)
-              }
+              {...register("name")}
               disabled={isSubmitting}
               className="rounded-none"
               placeholder="culture"
             />
-            {formErrors.name && (
-              <p className="text-sm text-red-700">{formErrors.name}</p>
+            {errors.name && (
+              <p className="text-sm text-red-700">{errors.name.message}</p>
             )}
           </div>
 
@@ -195,10 +133,7 @@ export default function CreateTagPage() {
             <Label htmlFor="slug">Slug</Label>
             <Input
               id="slug"
-              value={formValues.slug}
-              onChange={(event) =>
-                handleFieldChange("slug", event.target.value)
-              }
+              {...register("slug")}
               disabled={isSubmitting}
               className="rounded-none"
               placeholder="optional-kebab-case-slug"
@@ -206,8 +141,8 @@ export default function CreateTagPage() {
             <p className="text-xs text-stone-400">
               Leave blank to let the backend generate the slug from the name.
             </p>
-            {formErrors.slug && (
-              <p className="text-sm text-red-700">{formErrors.slug}</p>
+            {errors.slug && (
+              <p className="text-sm text-red-700">{errors.slug.message}</p>
             )}
           </div>
         </div>

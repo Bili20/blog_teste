@@ -139,6 +139,13 @@ function mapAuthorError(error: unknown): Error {
     }
 
     if (error.response?.status === 422) {
+      let message = "";
+      if (error.response.data?.issues.length > 0) {
+        error.response.data?.issues.map((issue: { message: string }) => {
+          message += `- ${issue.message}\n`;
+        });
+        return new Error(message);
+      }
       return new Error("Please review the form fields and try again.");
     }
 

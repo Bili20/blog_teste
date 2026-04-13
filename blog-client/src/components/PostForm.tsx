@@ -1,4 +1,9 @@
-import { type FormEvent } from "react";
+import {
+  Controller,
+  type Control,
+  type FieldErrors,
+  type UseFormRegister,
+} from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,36 +15,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { POST_CATEGORIES, type PostCategory } from "@/types/post";
+import { POST_CATEGORIES } from "@/types/post";
 import type { Tag } from "@/types/tag";
 import type { Author } from "@/services/authorService";
+import type { PostSchemaValues } from "@/lib/schemas";
 
 export type PostFormMode = "create" | "edit";
-
-export type PostFormValues = {
-  title: string;
-  subtitle: string;
-  excerpt: string;
-  body: string;
-  category: PostCategory;
-  readTime: string;
-  slug: string;
-  featured: boolean;
-  published: boolean;
-  authorId: string;
-  selectedTagSlugs: string[];
-};
-
-export type PostFormErrors = Partial<Record<keyof PostFormValues, string>> & {
-  authorDisplay?: string;
-};
 
 type PostFormProps = {
   mode: PostFormMode;
   title: string;
   description?: string;
-  values: PostFormValues;
-  errors: PostFormErrors;
+  control: Control<PostSchemaValues>;
+  register: UseFormRegister<PostSchemaValues>;
+  errors: FieldErrors<PostSchemaValues>;
   isSubmitting: boolean;
   submitLabel: string;
   submittingLabel?: string;
@@ -54,12 +43,7 @@ type PostFormProps = {
   isLoadingTags?: boolean;
   authorsErrorMessage?: string | null;
   tagsErrorMessage?: string | null;
-  onFieldChange: <FieldName extends keyof PostFormValues>(
-    fieldName: FieldName,
-    fieldValue: PostFormValues[FieldName],
-  ) => void;
-  onTagToggle: (tagSlug: string, isChecked: boolean) => void;
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
   onCancelPath?: string;
 };
 
@@ -67,7 +51,8 @@ export function PostForm({
   mode,
   title,
   description,
-  values,
+  control,
+  register,
   errors,
   isSubmitting,
   submitLabel,
@@ -83,8 +68,6 @@ export function PostForm({
   isLoadingTags = false,
   authorsErrorMessage = null,
   tagsErrorMessage = null,
-  onFieldChange,
-  onTagToggle,
   onSubmit,
   onCancelPath = "/admin/posts",
 }: PostFormProps) {
@@ -111,13 +94,12 @@ export function PostForm({
             <Label htmlFor="title">Title</Label>
             <Input
               id="title"
-              value={values.title}
-              onChange={(event) => onFieldChange("title", event.target.value)}
+              {...register("title")}
               disabled={isSubmitting}
               className="rounded-none"
             />
             {errors.title && (
-              <p className="text-sm text-red-700">{errors.title}</p>
+              <p className="text-sm text-red-700">{errors.title.message}</p>
             )}
           </div>
 
@@ -125,15 +107,12 @@ export function PostForm({
             <Label htmlFor="subtitle">Subtitle</Label>
             <Input
               id="subtitle"
-              value={values.subtitle}
-              onChange={(event) =>
-                onFieldChange("subtitle", event.target.value)
-              }
+              {...register("subtitle")}
               disabled={isSubmitting}
               className="rounded-none"
             />
             {errors.subtitle && (
-              <p className="text-sm text-red-700">{errors.subtitle}</p>
+              <p className="text-sm text-red-700">{errors.subtitle.message}</p>
             )}
           </div>
 
@@ -141,13 +120,12 @@ export function PostForm({
             <Label htmlFor="excerpt">Excerpt</Label>
             <Textarea
               id="excerpt"
-              value={values.excerpt}
-              onChange={(event) => onFieldChange("excerpt", event.target.value)}
+              {...register("excerpt")}
               disabled={isSubmitting}
               className="rounded-none min-h-[120px]"
             />
             {errors.excerpt && (
-              <p className="text-sm text-red-700">{errors.excerpt}</p>
+              <p className="text-sm text-red-700">{errors.excerpt.message}</p>
             )}
           </div>
 
@@ -155,13 +133,12 @@ export function PostForm({
             <Label htmlFor="body">Body</Label>
             <Textarea
               id="body"
-              value={values.body}
-              onChange={(event) => onFieldChange("body", event.target.value)}
+              {...register("body")}
               disabled={isSubmitting}
               className="rounded-none min-h-[320px]"
             />
             {errors.body && (
-              <p className="text-sm text-red-700">{errors.body}</p>
+              <p className="text-sm text-red-700">{errors.body.message}</p>
             )}
           </div>
         </div>
@@ -169,33 +146,37 @@ export function PostForm({
         <div className="border border-stone-200 bg-stone-50 p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <Label htmlFor="category">Category</Label>
-            <Select
-              value={values.category}
-              onValueChange={(value) =>
-                onFieldChange("category", value as PostCategory)
-              }
-              disabled={isSubmitting}
-            >
-              <SelectTrigger
-                id="category"
-                className="h-10 rounded-none border-stone-200 bg-white text-stone-900"
-              >
-                <SelectValue placeholder="Select a category" />
-              </SelectTrigger>
-              <SelectContent className="rounded-none">
-                {POST_CATEGORIES.map((categoryOption) => (
-                  <SelectItem
-                    key={categoryOption}
-                    value={categoryOption}
-                    className="rounded-none"
+            <Controller
+              name="category"
+              control={control}
+              render={({ field }) => (
+                <Select
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  disabled={isSubmitting}
+                >
+                  <SelectTrigger
+                    id="category"
+                    className="h-10 rounded-none border-stone-200 bg-white text-stone-900"
                   >
-                    {categoryOption}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+                    <SelectValue placeholder="Select a category" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-none">
+                    {POST_CATEGORIES.map((categoryOption) => (
+                      <SelectItem
+                        key={categoryOption}
+                        value={categoryOption}
+                        className="rounded-none"
+                      >
+                        {categoryOption}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
             {errors.category && (
-              <p className="text-sm text-red-700">{errors.category}</p>
+              <p className="text-sm text-red-700">{errors.category.message}</p>
             )}
           </div>
 
@@ -203,16 +184,13 @@ export function PostForm({
             <Label htmlFor="readTime">Read time</Label>
             <Input
               id="readTime"
-              value={values.readTime}
-              onChange={(event) =>
-                onFieldChange("readTime", event.target.value)
-              }
+              {...register("readTime")}
               disabled={isSubmitting}
               placeholder="7 min"
               className="rounded-none"
             />
             {errors.readTime && (
-              <p className="text-sm text-red-700">{errors.readTime}</p>
+              <p className="text-sm text-red-700">{errors.readTime.message}</p>
             )}
           </div>
 
@@ -220,14 +198,13 @@ export function PostForm({
             <Label htmlFor="slug">Slug</Label>
             <Input
               id="slug"
-              value={values.slug}
-              onChange={(event) => onFieldChange("slug", event.target.value)}
+              {...register("slug")}
               disabled={isSubmitting}
               placeholder="the-quiet-internet"
               className="rounded-none"
             />
             {errors.slug && (
-              <p className="text-sm text-red-700">{errors.slug}</p>
+              <p className="text-sm text-red-700">{errors.slug.message}</p>
             )}
           </div>
 
@@ -251,35 +228,41 @@ export function PostForm({
               </>
             ) : (
               <>
-                <Select
-                  value={values.authorId}
-                  onValueChange={(value) => onFieldChange("authorId", value)}
-                  disabled={isSubmitting || isLoadingAuthors}
-                >
-                  <SelectTrigger
-                    id="authorId"
-                    className="h-10 rounded-none border-stone-200 bg-white text-stone-900"
-                  >
-                    <SelectValue
-                      placeholder={
-                        isLoadingAuthors
-                          ? "Loading authors..."
-                          : "Select an author"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-none">
-                    {authorOptions.map((authorOption) => (
-                      <SelectItem
-                        key={authorOption.id}
-                        value={authorOption.id}
-                        className="rounded-none"
+                <Controller
+                  name="authorId"
+                  control={control}
+                  render={({ field }) => (
+                    <Select
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      disabled={isSubmitting || isLoadingAuthors}
+                    >
+                      <SelectTrigger
+                        id="authorId"
+                        className="h-10 rounded-none border-stone-200 bg-white text-stone-900"
                       >
-                        {authorOption.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                        <SelectValue
+                          placeholder={
+                            isLoadingAuthors
+                              ? "Loading authors..."
+                              : "Select an author"
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-none">
+                        {authorOptions.map((authorOption) => (
+                          <SelectItem
+                            key={authorOption.id}
+                            value={authorOption.id}
+                            className="rounded-none"
+                          >
+                            {authorOption.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
                 {authorsErrorMessage && (
                   <p className="text-sm text-red-700">{authorsErrorMessage}</p>
                 )}
@@ -287,10 +270,7 @@ export function PostForm({
             )}
 
             {errors.authorId && (
-              <p className="text-sm text-red-700">{errors.authorId}</p>
-            )}
-            {errors.authorDisplay && (
-              <p className="text-sm text-red-700">{errors.authorDisplay}</p>
+              <p className="text-sm text-red-700">{errors.authorId.message}</p>
             )}
           </div>
 
@@ -312,70 +292,89 @@ export function PostForm({
                   No tags available right now.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {tagOptions.map((tagOption) => {
-                    const isChecked = values.selectedTagSlugs.includes(
-                      tagOption.slug,
-                    );
+                <Controller
+                  name="selectedTagSlugs"
+                  control={control}
+                  render={({ field }) => (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {tagOptions.map((tagOption) => {
+                        const isChecked = field.value.includes(tagOption.slug);
 
-                    return (
-                      <label
-                        key={tagOption.id}
-                        className="flex items-center gap-3 border border-stone-200 px-4 py-3 cursor-pointer hover:bg-stone-50 transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isChecked}
-                          onChange={(event) =>
-                            onTagToggle(tagOption.slug, event.target.checked)
-                          }
-                          disabled={isSubmitting}
-                          className="h-4 w-4 rounded-none border-stone-300"
-                        />
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-stone-800">
-                            {tagOption.name}
-                          </p>
-                          <p className="text-xs text-stone-400">
-                            {tagOption.slug}
-                          </p>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
+                        return (
+                          <label
+                            key={tagOption.id}
+                            className="flex items-center gap-3 border border-stone-200 px-4 py-3 cursor-pointer hover:bg-stone-50 transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(event) => {
+                                const nextValue = event.target.checked
+                                  ? [...field.value, tagOption.slug]
+                                  : field.value.filter(
+                                      (slug) => slug !== tagOption.slug,
+                                    );
+                                field.onChange(nextValue);
+                              }}
+                              disabled={isSubmitting}
+                              className="h-4 w-4 rounded-none border-stone-300"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-stone-800">
+                                {tagOption.name}
+                              </p>
+                              <p className="text-xs text-stone-400">
+                                {tagOption.slug}
+                              </p>
+                            </div>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                />
               )}
             </div>
 
             {errors.selectedTagSlugs && (
-              <p className="text-sm text-red-700">{errors.selectedTagSlugs}</p>
+              <p className="text-sm text-red-700">
+                {errors.selectedTagSlugs.message}
+              </p>
             )}
           </div>
 
           {canSetFeatured && (
             <label className="flex items-center gap-3 text-sm text-stone-700">
-              <input
-                type="checkbox"
-                checked={values.featured}
-                onChange={(event) =>
-                  onFieldChange("featured", event.target.checked)
-                }
-                disabled={isSubmitting}
-                className="h-4 w-4 rounded-none border-stone-300"
+              <Controller
+                name="featured"
+                control={control}
+                render={({ field }) => (
+                  <input
+                    type="checkbox"
+                    checked={field.value}
+                    onChange={(event) => field.onChange(event.target.checked)}
+                    disabled={isSubmitting}
+                    className="h-4 w-4 rounded-none border-stone-300"
+                  />
+                )}
               />
               Featured post
             </label>
           )}
 
           <label className="flex items-center gap-3 text-sm text-stone-700">
-            <input
-              type="checkbox"
-              checked={values.published}
-              onChange={(event) =>
-                onFieldChange("published", event.target.checked)
-              }
-              disabled={isSubmitting}
-              className="h-4 w-4 rounded-none border-stone-300"
+            <Controller
+              name="published"
+              control={control}
+              render={({ field }) => (
+                <input
+                  type="checkbox"
+                  checked={field.value}
+                  onChange={(event) => field.onChange(event.target.checked)}
+                  disabled={isSubmitting}
+                  className="h-4 w-4 rounded-none border-stone-300"
+                />
+              )}
             />
             Published
           </label>

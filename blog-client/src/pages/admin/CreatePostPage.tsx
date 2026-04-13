@@ -1,34 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { Link, Navigate, useNavigate } from "react-router-dom";
-import {
-  PostForm,
-  type PostFormErrors,
-  type PostFormValues,
-} from "@/components/PostForm";
+import { PostForm } from "@/components/PostForm";
 import { createPost } from "@/services/postService";
 import { listTags } from "@/services/tagService";
 import { useAuth } from "@/hooks/useAuth";
 import { type CreatePostRequest } from "@/types/post";
 import type { Tag } from "@/types/tag";
-
-const INITIAL_FORM_VALUES: PostFormValues = {
-  title: "",
-  subtitle: "",
-  excerpt: "",
-  body: "",
-  category: "Essay",
-  readTime: "",
-  slug: "",
-  featured: false,
-  published: true,
-  authorId: "",
-  selectedTagSlugs: [],
-};
-
-function isKebabCase(value: string): boolean {
-  return /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value);
-}
+import { postSchema, type PostSchemaValues } from "@/lib/schemas";
 
 function getErrorMessage(error: unknown): string {
   if (
@@ -48,17 +29,35 @@ export default function CreatePostPage() {
   const navigate = useNavigate();
   const { user, isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
-  const [formValues, setFormValues] =
-    useState<PostFormValues>(INITIAL_FORM_VALUES);
-  const [formErrors, setFormErrors] = useState<PostFormErrors>({});
   const [apiErrorMessage, setApiErrorMessage] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const [tagOptions, setTagOptions] = useState<Tag[]>([]);
   const [isLoadingTags, setIsLoadingTags] = useState<boolean>(true);
   const [tagsErrorMessage, setTagsErrorMessage] = useState<string | null>(null);
 
   const pageTitle = useMemo(() => "Create post", []);
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    formState: { errors, isSubmitting },
+  } = useForm<PostSchemaValues>({
+    resolver: zodResolver(postSchema),
+    defaultValues: {
+      title: "",
+      subtitle: "",
+      excerpt: "",
+      body: "",
+      category: "Essay",
+      readTime: "",
+      slug: "",
+      featured: false,
+      published: true,
+      authorId: "",
+      selectedTagSlugs: [],
+    },
+  });
 
   useEffect(() => {
     let isMounted = true;
@@ -123,112 +122,21 @@ export default function CreatePostPage() {
     return <Navigate to="/" replace />;
   }
 
-  const handleFieldChange = <FieldName extends keyof PostFormValues>(
-    fieldName: FieldName,
-    fieldValue: PostFormValues[FieldName],
-  ) => {
-    setFormValues((currentFormValues) => ({
-      ...currentFormValues,
-      [fieldName]: fieldValue,
-    }));
-
-    setFormErrors((currentErrors) => ({
-      ...currentErrors,
-      [fieldName]: undefined,
-    }));
-
-    if (apiErrorMessage) {
-      setApiErrorMessage(null);
-    }
-  };
-
-  const handleTagToggle = (tagSlug: string, isChecked: boolean) => {
-    setFormValues((currentFormValues) => {
-      const nextSelectedTagSlugs = isChecked
-        ? currentFormValues.selectedTagSlugs.includes(tagSlug)
-          ? currentFormValues.selectedTagSlugs
-          : [...currentFormValues.selectedTagSlugs, tagSlug]
-        : currentFormValues.selectedTagSlugs.filter(
-            (selectedTagSlug) => selectedTagSlug !== tagSlug,
-          );
-
-      return {
-        ...currentFormValues,
-        selectedTagSlugs: nextSelectedTagSlugs,
-      };
-    });
-
-    setFormErrors((currentErrors) => ({
-      ...currentErrors,
-      selectedTagSlugs: undefined,
-    }));
-
-    if (apiErrorMessage) {
-      setApiErrorMessage(null);
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const nextErrors: PostFormErrors = {};
-    const normalizedSlug = formValues.slug.trim();
-
-    if (formValues.title.trim().length < 3) {
-      nextErrors.title = "Title must be at least 3 characters.";
-    }
-
-    if (formValues.subtitle.trim().length < 3) {
-      nextErrors.subtitle = "Subtitle must be at least 3 characters.";
-    }
-
-    if (formValues.excerpt.trim().length < 10) {
-      nextErrors.excerpt = "Excerpt must be at least 10 characters.";
-    }
-
-    if (formValues.body.trim().length < 20) {
-      nextErrors.body = "Body must be at least 20 characters.";
-    }
-
-    if (formValues.readTime.trim().length < 1) {
-      nextErrors.readTime = "Read time is required.";
-    }
-
-    if (!user.id.trim()) {
-      nextErrors.authorDisplay = "Authenticated author is required.";
-    }
-
-    if (normalizedSlug && !isKebabCase(normalizedSlug)) {
-      nextErrors.slug = "Slug must be in kebab-case.";
-    }
-
-    setFormErrors(nextErrors);
-
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const handleSubmit = async (
-    event: React.FormEvent<HTMLFormElement>,
-  ): Promise<void> => {
-    event.preventDefault();
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
+  const onSubmit = async (data: PostSchemaValues): Promise<void> => {
     setApiErrorMessage(null);
 
     const payload: CreatePostRequest = {
-      title: formValues.title.trim(),
-      subtitle: formValues.subtitle.trim(),
-      excerpt: formValues.excerpt.trim(),
-      body: formValues.body.trim(),
-      category: formValues.category,
-      readTime: formValues.readTime.trim(),
-      slug: formValues.slug.trim() || undefined,
-      featured: formValues.featured,
-      published: formValues.published,
+      title: data.title.trim(),
+      subtitle: data.subtitle.trim(),
+      excerpt: data.excerpt.trim(),
+      body: data.body.trim(),
+      category: data.category,
+      readTime: data.readTime.trim(),
+      slug: data.slug.trim() || undefined,
+      featured: data.featured,
+      published: data.published,
       authorId: user.id,
-      tagSlugs: formValues.selectedTagSlugs,
+      tagSlugs: data.selectedTagSlugs,
     };
 
     try {
@@ -243,8 +151,6 @@ export default function CreatePostPage() {
       toast.error("Unable to create post", {
         description: message,
       });
-    } finally {
-      setIsSubmitting(false);
     }
   };
 
@@ -273,8 +179,9 @@ export default function CreatePostPage() {
         mode="create"
         title={pageTitle}
         description={`Creating as ${user.name}.`}
-        values={formValues}
-        errors={formErrors}
+        register={register}
+        control={control}
+        errors={errors}
         isSubmitting={isSubmitting}
         isLoadingTags={isLoadingTags}
         tagsErrorMessage={tagsErrorMessage}
@@ -284,9 +191,7 @@ export default function CreatePostPage() {
         submittingLabel="Creating..."
         currentAuthorName={user.name}
         canSetFeatured={isAdmin}
-        onFieldChange={handleFieldChange}
-        onTagToggle={handleTagToggle}
-        onSubmit={handleSubmit}
+        onSubmit={handleSubmit(onSubmit)}
         onCancelPath="/admin/posts"
       />
     </div>
