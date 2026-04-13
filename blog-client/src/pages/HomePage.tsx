@@ -185,7 +185,7 @@ export default function HomePage() {
               <button
                 key={post.id}
                 onClick={() => void handleRead(post.slug)}
-                className="hover:text-stone-700 transition-colors whitespace-nowrap px-4 py-2 truncate max-w-[200px] sm:max-w-xs"
+                className="hover:text-stone-700 transition-colors whitespace-nowrap px-4 py-2 max-w-[200px] sm:max-w-xs"
                 title={post.title}
               >
                 {post.title}
