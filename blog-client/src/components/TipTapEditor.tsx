@@ -19,8 +19,19 @@ import {
   ImagePlus,
   Undo2,
   Redo2,
+  Check,
+  RefreshCw,
+  Trash2,
 } from "lucide-react";
 import { uploadImage, deleteImage } from "@/services/uploadService";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 
 /* ------------------------------------------------------------------ */
 /*  Custom Image extension – persists data-media-id on <img> nodes    */
@@ -43,7 +54,7 @@ const CustomImage = ImageBase.extend({
 });
 
 /* ------------------------------------------------------------------ */
-/*  Prop types                                                        */
+/*  Prop types                                                         */
 /* ------------------------------------------------------------------ */
 interface TipTapEditorProps {
   content: string;
@@ -101,18 +112,25 @@ export function TipTapEditor({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceFileInputRef = useRef<HTMLInputElement>(null);
 
+  /* selectedImage drives the inline action bar AND the context-menu
+     image actions. We mirror it in a ref so async handlers never read
+     a stale closure value after a React re-render.                     */
   const [selectedImage, setSelectedImage] = useState<{
     node: any;
     pos: number;
   } | null>(null);
-
-  // Bug fix #1: Mirror selectedImage in a ref so async handlers never
-  // read a stale closure value (e.g. after focus loss clears the state).
   const selectedImageRef = useRef<{ node: any; pos: number } | null>(null);
 
-  // Bug fix #2: Prevent double-clicks / race conditions with a processing flag.
+  /* Whether the context menu was opened while the pointer was over an
+     <img> node – controls which items are rendered in the menu.        */
+  const [contextMenuIsOnImage, setContextMenuIsOnImage] = useState(false);
+
+  /* Prevent concurrent operations (double-click race conditions).      */
   const [isProcessing, setIsProcessing] = useState(false);
 
+  /* ------------------------------------------------------------------ */
+  /*  Editor setup                                                       */
+  /* ------------------------------------------------------------------ */
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -141,7 +159,7 @@ export function TipTapEditor({
     },
   });
 
-  /* Keep content prop in sync ---------------------------------------- */
+  /* Keep content prop in sync (edit page loads existing HTML body).    */
   useEffect(() => {
     if (editor && content !== editor.getHTML()) {
       editor.commands.setContent(content);
@@ -155,7 +173,65 @@ export function TipTapEditor({
   }, [editor, disabled]);
 
   /* ------------------------------------------------------------------ */
-  /*  Image upload (new image)                                           */
+  /*  Context menu – detect whether right-click landed on an image      */
+  /* ------------------------------------------------------------------ */
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      if (!editor) return;
+
+      const target = event.target as HTMLElement;
+
+      if (target.tagName !== "IMG") {
+        setContextMenuIsOnImage(false);
+        return;
+      }
+
+      /* Use ProseMirror's coordinate-to-position mapping.
+         posAtCoords returns { pos, inside } where `inside` is the
+         position of the innermost node that contains the coordinates.  */
+      const coords = { left: event.clientX, top: event.clientY };
+      const result = editor.view.posAtCoords(coords);
+
+      if (!result) {
+        setContextMenuIsOnImage(false);
+        return;
+      }
+
+      /* Try `inside` first (most precise), then neighbours.            */
+      const candidates = [result.inside, result.pos, result.pos - 1].filter(
+        (p) => p >= 0,
+      );
+
+      for (const p of candidates) {
+        const node = editor.state.doc.nodeAt(p);
+        if (node && node.type.name === "image") {
+          const imageData = { node, pos: p };
+          /* Update both the ref and state so the inline bar and context
+             menu handlers always have the correct image reference.      */
+          selectedImageRef.current = imageData;
+          setSelectedImage(imageData);
+          setContextMenuIsOnImage(true);
+          /* Select the image in the editor so keyboard operations and
+             the inline action bar stay in sync.                         */
+          editor.chain().setNodeSelection(p).run();
+          return;
+        }
+      }
+
+      setContextMenuIsOnImage(false);
+    },
+    [editor],
+  );
+
+  /* Reset image-context flag when the menu closes without an action.   */
+  const handleContextMenuOpenChange = useCallback((open: boolean) => {
+    if (!open) {
+      setContextMenuIsOnImage(false);
+    }
+  }, []);
+
+  /* ------------------------------------------------------------------ */
+  /*  Image upload (toolbar "+" button)                                  */
   /* ------------------------------------------------------------------ */
   const handleImageUpload = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,12 +244,9 @@ export function TipTapEditor({
         editor
           .chain()
           .focus()
-          .setImage({
-            src: result.url,
-            "data-media-id": result.id,
-          } as any)
+          .setImage({ src: result.url, "data-media-id": result.id } as any)
           .run();
-        // Deselect after insert so the action bar doesn't appear automatically
+        /* Deselect so the inline bar does not appear automatically.    */
         selectedImageRef.current = null;
         setSelectedImage(null);
       } catch (error) {
@@ -182,7 +255,6 @@ export function TipTapEditor({
         setIsProcessing(false);
       }
 
-      // Reset the input so the same file can be selected again
       event.target.value = "";
     },
     [editor],
@@ -202,41 +274,34 @@ export function TipTapEditor({
   const handleReplaceImageFile = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
-      // Bug fix #1: Read from the ref (always current) instead of the
-      // potentially-stale `selectedImage` closure value.
+      /* Always read from the ref – never from the closure – so that
+         focus-loss induced re-renders cannot stale the value.          */
       const currentSelected = selectedImageRef.current;
       if (!file || !editor || !currentSelected) return;
 
       setIsProcessing(true);
       try {
-        // Delete old image from server if it has a media ID
         const oldMediaId = currentSelected.node.attrs["data-media-id"];
         if (oldMediaId) {
           try {
             await deleteImage(oldMediaId);
           } catch (error) {
-            // Bug fix #3: Log instead of silently swallowing
             console.error("Failed to delete old image from server:", error);
           }
         }
 
-        // Upload new image
         const result = await uploadImage(file);
 
-        // Replace the image at its position
-        const { pos } = currentSelected;
         editor
           .chain()
           .focus()
-          .setNodeSelection(pos)
+          .setNodeSelection(currentSelected.pos)
           .deleteSelection()
-          .setImage({
-            src: result.url,
-            "data-media-id": result.id,
-          } as any)
+          .setImage({ src: result.url, "data-media-id": result.id } as any)
           .run();
-        // Deselect after replace so the action bar disappears — user must
-        // click the new image explicitly to interact with it again.
+
+        /* Deselect after replace – user must click the new image to
+           interact with it again.                                       */
         selectedImageRef.current = null;
         setSelectedImage(null);
       } catch (error) {
@@ -254,7 +319,6 @@ export function TipTapEditor({
   /*  Delete image                                                       */
   /* ------------------------------------------------------------------ */
   const handleDeleteImage = useCallback(async () => {
-    // Bug fix #1: Read from the ref instead of the closure value.
     const currentSelected = selectedImageRef.current;
     if (!editor || !currentSelected) return;
 
@@ -265,14 +329,12 @@ export function TipTapEditor({
         try {
           await deleteImage(mediaId);
         } catch (error) {
-          // Bug fix #3: Log instead of silently swallowing
           console.error("Failed to delete image from server:", error);
         }
       } else {
         console.warn("Image has no data-media-id, skipping server delete");
       }
 
-      // Remove the image from the editor
       editor
         .chain()
         .focus()
@@ -317,7 +379,7 @@ export function TipTapEditor({
 
   return (
     <div className="border border-stone-200 bg-white rounded-none">
-      {/* Toolbar */}
+      {/* ── Toolbar ───────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-0.5 border-b border-stone-200 bg-stone-50 px-2 py-1.5">
         <ToolbarButton
           icon={Bold}
@@ -404,7 +466,7 @@ export function TipTapEditor({
         />
         <ToolbarButton
           icon={ImagePlus}
-          label="Image"
+          label="Insert image"
           onClick={handleImageButtonClick}
           isActive={false}
           disabled={disabled || isProcessing}
@@ -428,7 +490,7 @@ export function TipTapEditor({
         />
       </div>
 
-      {/* Image actions bar — shown when an image is selected */}
+      {/* ── Inline image action bar (visible when an image is clicked) ─ */}
       {selectedImage && (
         <div className="flex items-center gap-2 border-b border-stone-200 bg-amber-50 px-3 py-1.5">
           <span className="text-xs text-amber-800 font-medium">
@@ -454,7 +516,7 @@ export function TipTapEditor({
         </div>
       )}
 
-      {/* Hidden file input for image uploads */}
+      {/* ── Hidden file inputs ─────────────────────────────────────── */}
       <input
         ref={fileInputRef}
         type="file"
@@ -462,8 +524,6 @@ export function TipTapEditor({
         onChange={handleImageUpload}
         className="hidden"
       />
-
-      {/* Hidden file input for image replacement */}
       <input
         ref={replaceFileInputRef}
         type="file"
@@ -472,11 +532,181 @@ export function TipTapEditor({
         className="hidden"
       />
 
-      {/* Editor content area */}
-      <EditorContent
-        editor={editor}
-        className={disabled ? "opacity-60 pointer-events-none" : ""}
-      />
+      {/* ── Editor area wrapped in a right-click context menu ─────── */}
+      <ContextMenu onOpenChange={handleContextMenuOpenChange}>
+        <ContextMenuTrigger asChild>
+          <div onContextMenu={handleContextMenu}>
+            <EditorContent
+              editor={editor}
+              className={disabled ? "opacity-60 pointer-events-none" : ""}
+            />
+          </div>
+        </ContextMenuTrigger>
+
+        <ContextMenuContent className="w-52 rounded-none">
+          {/* ── Text formatting (always visible) ──────────────────── */}
+          <ContextMenuLabel className="text-xs text-stone-400 uppercase tracking-widest px-2 py-1">
+            Formatting
+          </ContextMenuLabel>
+
+          <ContextMenuItem
+            onClick={() => editor.chain().focus().toggleBold().run()}
+            disabled={disabled}
+            className="gap-2"
+          >
+            <Bold className="w-4 h-4 text-stone-500" />
+            Bold
+            {editor.isActive("bold") && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          <ContextMenuItem
+            onClick={() => editor.chain().focus().toggleItalic().run()}
+            disabled={disabled}
+            className="gap-2"
+          >
+            <Italic className="w-4 h-4 text-stone-500" />
+            Italic
+            {editor.isActive("italic") && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          <ContextMenuItem
+            onClick={() => editor.chain().focus().toggleUnderline().run()}
+            disabled={disabled}
+            className="gap-2"
+          >
+            <UnderlineIcon className="w-4 h-4 text-stone-500" />
+            Underline
+            {editor.isActive("underline") && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          <ContextMenuItem
+            onClick={() => editor.chain().focus().toggleStrike().run()}
+            disabled={disabled}
+            className="gap-2"
+          >
+            <Strikethrough className="w-4 h-4 text-stone-500" />
+            Strikethrough
+            {editor.isActive("strike") && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          <ContextMenuSeparator />
+
+          <ContextMenuItem
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 2 }).run()
+            }
+            disabled={disabled}
+            className="gap-2"
+          >
+            <Heading2 className="w-4 h-4 text-stone-500" />
+            Heading 2
+            {editor.isActive("heading", { level: 2 }) && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          <ContextMenuItem
+            onClick={() =>
+              editor.chain().focus().toggleHeading({ level: 3 }).run()
+            }
+            disabled={disabled}
+            className="gap-2"
+          >
+            <Heading3 className="w-4 h-4 text-stone-500" />
+            Heading 3
+            {editor.isActive("heading", { level: 3 }) && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          <ContextMenuSeparator />
+
+          <ContextMenuItem
+            onClick={() => editor.chain().focus().toggleBulletList().run()}
+            disabled={disabled}
+            className="gap-2"
+          >
+            <List className="w-4 h-4 text-stone-500" />
+            Bullet list
+            {editor.isActive("bulletList") && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          <ContextMenuItem
+            onClick={() => editor.chain().focus().toggleOrderedList().run()}
+            disabled={disabled}
+            className="gap-2"
+          >
+            <ListOrdered className="w-4 h-4 text-stone-500" />
+            Ordered list
+            {editor.isActive("orderedList") && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          <ContextMenuItem
+            onClick={() => editor.chain().focus().toggleBlockquote().run()}
+            disabled={disabled}
+            className="gap-2"
+          >
+            <Quote className="w-4 h-4 text-stone-500" />
+            Blockquote
+            {editor.isActive("blockquote") && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          <ContextMenuItem
+            onClick={handleLinkInsert}
+            disabled={disabled}
+            className="gap-2"
+          >
+            <LinkIcon className="w-4 h-4 text-stone-500" />
+            Link
+            {editor.isActive("link") && (
+              <Check className="ml-auto w-3.5 h-3.5 text-amber-700" />
+            )}
+          </ContextMenuItem>
+
+          {/* ── Image actions (only when right-click was on an image) ─ */}
+          {contextMenuIsOnImage && (
+            <>
+              <ContextMenuSeparator />
+
+              <ContextMenuLabel className="text-xs text-stone-400 uppercase tracking-widest px-2 py-1">
+                Image
+              </ContextMenuLabel>
+
+              <ContextMenuItem
+                onClick={handleReplaceImage}
+                disabled={disabled || isProcessing}
+                className="gap-2"
+              >
+                <RefreshCw className="w-4 h-4 text-stone-500" />
+                Replace image
+              </ContextMenuItem>
+
+              <ContextMenuItem
+                onClick={handleDeleteImage}
+                disabled={disabled || isProcessing}
+                className="gap-2 text-red-600 focus:text-red-600 focus:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4" />
+                Delete image
+              </ContextMenuItem>
+            </>
+          )}
+        </ContextMenuContent>
+      </ContextMenu>
     </div>
   );
 }
