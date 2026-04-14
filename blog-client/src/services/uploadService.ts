@@ -1,6 +1,7 @@
 import { api, API_BASE_URL } from "@/services/api";
 
 export interface UploadResponse {
+  id: string;
   url: string;
   width: number;
   height: number;
@@ -22,4 +23,8 @@ export async function uploadImage(file: File): Promise<UploadResponse> {
     ...response.data,
     url: `${SERVER_ORIGIN}${response.data.url}`,
   };
+}
+
+export async function deleteImage(id: string): Promise<void> {
+  await api.delete(`/uploads/${id}`);
 }

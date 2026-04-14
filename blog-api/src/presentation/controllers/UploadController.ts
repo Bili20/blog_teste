@@ -4,8 +4,11 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import sharp from "sharp";
 import { AppError } from "@/shared/errors/AppError";
+import { IMediaService } from "@/domain/interfaces/services/IMediaService";
 
 export class UploadController {
+  constructor(private readonly mediaService: IMediaService) {}
+
   uploadImage = async (req: Request, res: Response): Promise<void> => {
     if (!req.file) {
       throw new AppError("No image file provided", 400);
@@ -22,10 +25,27 @@ export class UploadController {
       .webp({ quality: 80 })
       .toFile(outputPath);
 
-    res.status(201).json({
+    const fileStats = fs.statSync(outputPath);
+
+    const media = await this.mediaService.createMedia({
+      filename: uniqueName,
       url: `/uploads/${uniqueName}`,
-      width,
-      height,
+      mimetype: "image/webp",
+      width: width ?? null,
+      height: height ?? null,
+      size: fileStats.size,
     });
+
+    res.status(201).json({
+      id: media.id,
+      url: media.url,
+      width: media.width,
+      height: media.height,
+    });
+  };
+
+  deleteImage = async (req: Request, res: Response): Promise<void> => {
+    await this.mediaService.deleteMedia(req.params.id);
+    res.status(204).send();
   };
 }

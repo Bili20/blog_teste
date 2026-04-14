@@ -11,10 +11,14 @@ import {
   IPostService,
   ProtectedPostManagementOptions,
 } from "@/domain/interfaces/services/IPostService";
+import { IMediaService } from "@/domain/interfaces/services/IMediaService";
 import { NotFoundError, ConflictError } from "@/shared/errors/AppError";
 
 export class PostService implements IPostService {
-  constructor(private readonly postRepository: IPostRepository) {}
+  constructor(
+    private readonly postRepository: IPostRepository,
+    private readonly mediaService: IMediaService,
+  ) {}
 
   async listPosts(
     options?: FindAllPostsOptions,
@@ -62,7 +66,13 @@ export class PostService implements IPostService {
       throw new ConflictError(`A post with slug "${slug}" already exists`);
     }
 
-    return this.postRepository.create({ ...data, slug });
+    const post = await this.postRepository.create({ ...data, slug });
+
+    if (post.body) {
+      await this.mediaService.associateMediaWithPost(post.id, post.body);
+    }
+
+    return post;
   }
 
   async updatePost(id: string, data: UpdatePostData): Promise<Post> {
@@ -90,11 +100,18 @@ export class PostService implements IPostService {
       }
     }
 
-    return this.postRepository.update(id, data);
+    const post = await this.postRepository.update(id, data);
+
+    if (data.body !== undefined) {
+      await this.mediaService.associateMediaWithPost(post.id, post.body);
+    }
+
+    return post;
   }
 
   async deletePost(id: string): Promise<void> {
     await this.getPost(id);
+    await this.mediaService.deleteMediaByPostId(id);
     await this.postRepository.delete(id);
   }
 }

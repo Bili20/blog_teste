@@ -16,5 +16,12 @@ export function uploadRoutes(controller: UploadController): Router {
     controller.uploadImage,
   );
 
+  router.delete(
+    "/:id",
+    authenticate,
+    requireRole(ROLE_ADMIN, ROLE_AUTHOR),
+    controller.deleteImage,
+  );
+
   return router;
 }

@@ -3,7 +3,7 @@ import { Request, Response, NextFunction } from "express";
 export function requestLogger(
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
 ): void {
   const start = Date.now();
 
@@ -13,12 +13,12 @@ export function requestLogger(
       res.statusCode >= 500
         ? "\x1b[31m" // red
         : res.statusCode >= 400
-        ? "\x1b[33m" // yellow
-        : "\x1b[32m"; // green
+          ? "\x1b[33m" // yellow
+          : "\x1b[32m"; // green
     const reset = "\x1b[0m";
 
     console.log(
-      `${color}${req.method}${reset} ${req.originalUrl} → ${color}${res.statusCode}${reset} (${duration}ms)`
+      `${color}${req.method}${reset} ${req.originalUrl} → ${color}${res.statusCode}${reset} (${duration}ms)`,
     );
   });
 

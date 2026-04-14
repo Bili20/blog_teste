@@ -75,9 +75,25 @@ model Post {
   authorId String
   author   Author @relation(fields: [authorId], references: [id])
 
-  tags PostTag[]
+  tags  PostTag[]
+  media Media[]
 
   @@map("posts")
+}
+
+model Media {
+  id        String   @id @default(cuid())
+  filename  String   @unique
+  url       String
+  mimetype  String
+  width     Int?
+  height    Int?
+  size      Int
+  postId    String?
+  post      Post?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@map("media")
 }
 
 model PostTag {

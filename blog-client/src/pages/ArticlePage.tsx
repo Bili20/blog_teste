@@ -98,7 +98,16 @@ export default function ArticlePage() {
         "a",
         "img",
       ],
-      ALLOWED_ATTR: ["href", "target", "rel", "src", "alt", "width", "height"],
+      ALLOWED_ATTR: [
+        "href",
+        "target",
+        "rel",
+        "src",
+        "alt",
+        "width",
+        "height",
+        "data-media-id",
+      ],
     });
   }, [post]);
 

@@ -10,12 +10,14 @@ import { PrismaPostRepository } from "@/infrastructure/repositories/PrismaPostRe
 import { PrismaAuthorRepository } from "@/infrastructure/repositories/PrismaAuthorRepository";
 import { PrismaTagRepository } from "@/infrastructure/repositories/PrismaTagRepository";
 import { PrismaAuthRepository } from "@/infrastructure/repositories/PrismaAuthRepository";
+import { PrismaMediaRepository } from "@/infrastructure/repositories/PrismaMediaRepository";
 
 // Services
 import { PostService } from "@/application/services/PostService";
 import { AuthorService } from "@/application/services/AuthorService";
 import { TagService } from "@/application/services/TagService";
 import { AuthService } from "@/application/services/AuthService";
+import { MediaService } from "@/application/services/MediaService";
 
 // Controllers
 import { PostController } from "@/presentation/controllers/PostController";
@@ -53,7 +55,7 @@ export function createApp(): Application {
 
     next();
   });
-  app.use(requestLogger);
+  //app.use(requestLogger);
 
   // ── Static file serving ─────────────────────────────────────────────────────
   app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
@@ -63,8 +65,10 @@ export function createApp(): Application {
   const authorRepository = new PrismaAuthorRepository(prisma);
   const tagRepository = new PrismaTagRepository(prisma);
   const authRepository = new PrismaAuthRepository(prisma);
+  const mediaRepository = new PrismaMediaRepository(prisma);
 
-  const postService = new PostService(postRepository);
+  const mediaService = new MediaService(mediaRepository);
+  const postService = new PostService(postRepository, mediaService);
   const authorService = new AuthorService(authorRepository);
   const tagService = new TagService(tagRepository);
   const authService = new AuthService(authRepository);
@@ -73,7 +77,7 @@ export function createApp(): Application {
   const authorController = new AuthorController(authorService);
   const tagController = new TagController(tagService);
   const authController = new AuthController(authService);
-  const uploadController = new UploadController();
+  const uploadController = new UploadController(mediaService);
 
   // ── Routes ──────────────────────────────────────────────────────────────────
   app.use("/api/auth", authRoutes(authController));
