@@ -86,7 +86,7 @@ export function AppHeader() {
             About
           </Link>
 
-          {isAuthenticated && user ? (
+          {isAuthenticated && user && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
@@ -167,27 +167,11 @@ export function AppHeader() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-          ) : (
-            <Link
-              to="/login"
-              className="bg-stone-900 text-white rounded-none text-xs tracking-widest uppercase font-semibold px-4 py-2 hover:bg-amber-700 transition-colors"
-            >
-              Login
-            </Link>
           )}
         </nav>
 
         {/* ── Mobile nav ───────────────────────────────────────────────────── */}
         <div className="flex sm:hidden items-center gap-3">
-          {!isAuthenticated && (
-            <Link
-              to="/login"
-              className="bg-stone-900 text-white rounded-none text-xs tracking-widest uppercase font-semibold px-4 py-2 hover:bg-amber-700 transition-colors"
-            >
-              Login
-            </Link>
-          )}
-
           <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <button

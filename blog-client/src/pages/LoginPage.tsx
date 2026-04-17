@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, Navigate, useLocation, useNavigate } from "react-router-dom";
@@ -30,6 +30,16 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, isAuthenticated, isLoading: isAuthLoading } = useAuth();
+
+  useEffect(() => {
+    const meta = document.createElement("meta");
+    meta.name = "robots";
+    meta.content = "noindex, nofollow";
+    document.head.appendChild(meta);
+    return () => {
+      document.head.removeChild(meta);
+    };
+  }, []);
 
   const {
     register,
